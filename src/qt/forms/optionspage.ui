@@ -624,6 +624,26 @@
          </layout>
         </widget>
        </item>
+       <item>
+        <widget class="QGroupBox" name="fiatValuegroupBox">
+         <property name="title">
+          <string>Dollar Value</string>
+         </property>
+         <layout class="QHBoxLayout" name="horizontalLayout_9">
+          <item>
+           <layout class="QHBoxLayout" name="horizontalLayout_7">
+            <item>
+             <widget class="QCheckBox" name="displayFiatValue">
+              <property name="text">
+               <string>Display the Fiat value of wallet on Overview</string>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </item>
+         </layout>
+        </widget>
+       </item>
       </layout>
      </widget>
     </widget>

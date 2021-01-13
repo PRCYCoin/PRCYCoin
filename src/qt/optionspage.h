@@ -102,6 +102,7 @@ private Q_SLOTS:
     void minimizeOnClose_clicked(int);
     void changeDigits(int);
     void alwaysRequest2FA_clicked(int);
+    void displayFiatValue_clicked(int);
 };
 
 #endif // BITCOIN_QT_OPTIONSPAGE_H

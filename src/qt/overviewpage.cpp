@@ -24,6 +24,7 @@
 #include <QSettings>
 #include <QTimer>
 #include <QtMath>
+#include <QNetworkAccessManager>
 
 #define DECORATION_SIZE 48
 #define ICON_OFFSET 16
@@ -121,6 +122,12 @@ OverviewPage::OverviewPage(QWidget* parent) : QDialog(parent, Qt::WindowSystemMe
     connect(pingNetworkInterval, SIGNAL(timeout()), this, SLOT(tryNetworkBlockCount()));
     pingNetworkInterval->setInterval(3000);
     pingNetworkInterval->start();
+
+    checkDollarValue();
+    checkDollarValueInterval = new QTimer(this);
+    connect(checkDollarValueInterval, SIGNAL(timeout()), this, SLOT(checkDollarValue()));
+    checkDollarValueInterval->setInterval(300000);
+    checkDollarValueInterval->start();
 
     initSyncCircle(.8);
 
@@ -543,4 +550,47 @@ void OverviewPage::updateLockStatus(int status) {
         ui->btnLockUnlock->setStyleSheet("border-image: url(:/images/lock) 0 0 0 0 stretch stretch; width: 20px;");
     else
         ui->btnLockUnlock->setStyleSheet("border-image: url(:/images/unlock) 0 0 0 0 stretch stretch; width: 30px;");
+}
+
+void OverviewPage::checkDollarValue()
+{
+    QSettings settings;
+    bool fDisplayFiatValue = settings.value("fDisplayFiatValue").toBool();
+
+    // Don't bother to check value if wallet is locked or fDisplayFiatValue is set to false
+    if (pwalletMain->IsLocked() || !fDisplayFiatValue) {
+        ui->labelFiatValue->setText("");
+        return;
+    }
+    QString defaultCurrency = "USD";
+    QUrl serviceUrl = QUrl("https://api.coingecko.com/api/v3/simple/price?ids=prcy-coin&vs_currencies=" + defaultCurrency + "&include_market_cap=false&include_24hr_vol=false&include_24hr_change=false&include_last_updated_at=false");
+    QNetworkAccessManager *manager = new QNetworkAccessManager(this);
+    connect(manager, SIGNAL(finished(QNetworkReply*)), this, SLOT(checkDollarValueserviceRequestFinished(QNetworkReply*)));
+    QNetworkRequest request;
+    request.setUrl(serviceUrl);
+    QNetworkReply* reply = manager->get(request);
+}
+
+void OverviewPage::checkDollarValueserviceRequestFinished(QNetworkReply* reply)
+{
+    reply->deleteLater();
+    if(reply->error() == QNetworkReply::NoError) {
+        // Check if balance is 0 for early return
+        int balance = pwalletMain->GetBalance() / COIN;
+        if (balance == 0) return;
+        QString defaultCurrency = "USD";
+        // Parse data, not the best way but functional
+        QByteArray data = reply->readAll();
+        QString valueString = data.trimmed();
+        valueString.remove(0,20);
+        valueString.chop(2);
+        // Convert to double
+        double valueDollar = valueString.toDouble();
+        // Calculate balance * valueDollar
+        int calculatedBalance = balance * valueDollar;
+        LogPrintf("%s: balance: %d, value: %d\n", __func__, balance, calculatedBalance);
+        valueString = QString::number(calculatedBalance);
+    } else {
+        LogPrintf("%s: Error checking for Dollar value.\n", __func__);
+    }
 }
