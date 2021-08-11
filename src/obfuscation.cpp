@@ -544,7 +544,7 @@ bool CObfuScationSigner::IsVinAssociatedWithPubkey(CTxIn& vin, CPubKey& pubkey)
             return false;
         }
 
-        if (amount == 5000 * COIN) {
+        if (amount == Params().MNCollateralAmt()) {
             if (out.scriptPubKey == payee2) return true;
         }
     }

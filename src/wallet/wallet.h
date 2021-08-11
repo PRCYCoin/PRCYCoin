@@ -56,7 +56,6 @@ extern bool bdisableSystemnotifications;
 extern bool fSendFreeTransactions;
 extern bool fPayAtLeastCustomFee;
 extern int64_t nReserveBalance;
-extern int64_t nDefaultConsolidateTime;
 
 //! -paytxfee default
 static const CAmount DEFAULT_TRANSACTION_FEE = 0.1 * COIN;//
@@ -217,11 +216,9 @@ enum StakingStatusError
     STAKABLE_NEED_CONSOLIDATION_WITH_RESERVE_BALANCE  //stable and consolidation, needs to estimate fees
 };
 
-enum StakingMode {
-    STOPPED, //staking disabled or balance < 2.5k
-    STAKING_WITHOUT_CONSOLIDATION,
-    STAKING_WITH_CONSOLIDATION,
-    STAKING_WITH_CONSOLIDATION_WITH_STAKING_NEWW_FUNDS
+enum CombineMode {
+    OFF,
+    ON,
 };
 
 /**
@@ -258,8 +255,6 @@ private:
     void SyncMetaData(std::pair<TxSpends::iterator, TxSpends::iterator>);
 
 public:
-    static const CAmount MINIMUM_STAKE_AMOUNT = 2500 * COIN;
-    static const CAmount DEFAULT_STAKE_SPLIT_THRESHOLD = 100000;
     static const int32_t MAX_DECOY_POOL = 500;
     static const int32_t PROBABILITY_NEW_COIN_SELECTED = 70;
     bool RescanAfterUnlock(int fromHeight);
@@ -352,7 +347,7 @@ public:
 
     int64_t nTimeFirstKey;
 
-    StakingMode stakingMode = STOPPED;
+    CombineMode combineMode = OFF;
     int64_t DecoyConfirmationMinimum = 15;
 
     mutable std::map<std::string, CKeyImage> outpointToKeyImages;

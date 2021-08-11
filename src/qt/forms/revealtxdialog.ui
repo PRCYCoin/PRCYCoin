@@ -7,17 +7,17 @@
     <x>0</x>
     <y>0</y>
     <width>675</width>
-    <height>180</height>
+    <height>252</height>
    </rect>
   </property>
   <property name="windowTitle">
    <string>Transaction Details</string>
   </property>
-  <layout class="QVBoxLayout" name="verticalLayout" stretch="0,0,0,0,0">
+  <layout class="QVBoxLayout" name="verticalLayout">
    <item>
-    <layout class="QHBoxLayout" name="horizontalLayout" stretch="0,1,5">
+    <layout class="QHBoxLayout" name="horizontalLayoutTXID" stretch="0,1,5">
      <item>
-      <widget class="QPushButton" name="pushButtonCPID">
+      <widget class="QPushButton" name="pushButtonCopyID">
        <property name="toolTip">
         <string>Copy transaction ID to clipboard</string>
        </property>
@@ -61,9 +61,9 @@
     </layout>
    </item>
    <item>
-    <layout class="QHBoxLayout" name="horizontalLayout_2" stretch="0,1,5">
+    <layout class="QHBoxLayout" name="horizontalLayoutAddress" stretch="0,1,5">
      <item>
-      <widget class="QPushButton" name="pushButtonCPAddr">
+      <widget class="QPushButton" name="pushButtonCopyAddr">
        <property name="toolTip">
         <string>Copy address to clipboard</string>
        </property>
@@ -107,9 +107,9 @@
     </layout>
    </item>
    <item>
-    <layout class="QHBoxLayout" name="horizontalLayout_3" stretch="0,1,5">
+    <layout class="QHBoxLayout" name="horizontalLayoutPrivKey" stretch="0,1,5">
      <item>
-      <widget class="QPushButton" name="pushButtonCPPrivK">
+      <widget class="QPushButton" name="pushButtonCopyPrivKey">
        <property name="toolTip">
         <string>Copy transaction private key to clipboard</string>
        </property>
@@ -153,9 +153,55 @@
     </layout>
    </item>
    <item>
-    <layout class="QHBoxLayout" name="horizontalLayout_4" stretch="0,1,5">
+    <layout class="QHBoxLayout" name="horizontalLayoutAmount" stretch="0,1,5">
      <item>
-      <widget class="QPushButton" name="pushButtonTxFee">
+      <widget class="QPushButton" name="pushButtonCopyTxAmount">
+       <property name="toolTip">
+        <string>Copy Transaction Amount to clipboard</string>
+       </property>
+       <property name="text">
+        <string/>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="label_4">
+       <property name="minimumSize">
+        <size>
+         <width>83</width>
+         <height>0</height>
+        </size>
+       </property>
+       <property name="text">
+        <string>Amount</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="lblTxAmount">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize">
+        <size>
+         <width>415</width>
+         <height>0</height>
+        </size>
+       </property>
+       <property name="text">
+        <string/>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="horizontalLayoutTxFee" stretch="0,1,5">
+     <item>
+      <widget class="QPushButton" name="pushButtonCopyTxFee">
        <property name="toolTip">
         <string>Copy Transaction Fee to clipboard</string>
        </property>
@@ -165,7 +211,7 @@
       </widget>
      </item>
      <item>
-      <widget class="QLabel" name="label_4">
+      <widget class="QLabel" name="label_5">
        <property name="minimumSize">
         <size>
          <width>83</width>

@@ -1,6 +1,7 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2014 The Bitcoin developers
 // Copyright (c) 2018-2019 The DAPS Project developers
+// Copyright (c) 2020-2021 The PRCY developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -46,6 +47,8 @@ bool CheckPoABlockNotContainingPoABlockInfo(const CBlock& block, const CBlockInd
 bool CheckPoAblockTime(const CBlock& block);
 bool CheckPoABlockNotAuditingOverlap(const CBlock& block);
 bool CheckPoABlockRewardAmount(const CBlock& block, const CBlockIndex* pindex);
-bool IsFixedAudit(std::string txid);
+bool CheckPoABlockPaddingAmount(const CBlock& block, const CBlockIndex* pindex);
+bool IsFixedAudit(std::string txid, int nHeight);
+bool IsWrongAudit(std::string txid, int nHeight);
 
 #endif // BITCOIN_POA_H

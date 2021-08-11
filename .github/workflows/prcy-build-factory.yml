@@ -16,6 +16,17 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@v2
+    - name: Create Version Variable
+      run: |
+        export VERSION=$(cat version.txt | sed 's/[^0-9,.]//g')
+        export TAG=v${VERSION}
+        echo "VERSION=${VERSION}" >> $GITHUB_ENV
+        echo "TAG=${TAG}" >> $GITHUB_ENV
+    - name: Print Variables
+      run: |
+        echo "VERSION=${VERSION}"
+        echo "TAG=${TAG}"
+        printenv
     # May need qt and protobuf to configure qt and include prcycoin-qt.1 in distribution
     - name: Install Required Packages
       run: |
@@ -49,7 +60,7 @@ jobs:
     needs: create-source-distribution
     runs-on: ubuntu-18.04
     env:
-      ARTIFACT_DIR: prcycoin-v-x86_64-linux
+      ARTIFACT_DIR: prcycoin-x86_64-linux
       TEST_LOG_ARTIFACT_DIR: test-logs
     steps:
     - name: Getting Source
@@ -61,6 +72,11 @@ jobs:
         tar -xzf depends.tar.gz
         tar -xzf prcycoin.tar.gz --strip-components=1
       working-directory: ${{ env.SOURCE_ARTIFACT }}
+    - name: Set Env
+      shell: bash
+      run: |
+        export VERSION=$(cat $SOURCE_ARTIFACT/version.txt | sed 's/[^0-9,.]//g')
+        echo "VERSION=${VERSION}" >> $GITHUB_ENV
     - name: Install Required Packages
       run: |
         sudo apt-get update
@@ -71,7 +87,7 @@ jobs:
     - name: Build PRCY 
       run: |
         ./autogen.sh
-        ./configure --disable-jni --disable-tests --disable-gui-tests --disable-bench --prefix=$(realpath depends/x86_64-pc-linux-gnu)
+        ./configure --disable-jni --disable-tests --disable-gui-tests --disable-bench --prefix=$(realpath depends/x86_64-pc-linux-gnu) --enable-upnp-default
         make -j$(nproc)
       working-directory: ${{ env.SOURCE_ARTIFACT }}
     - name: Prepare Files for Artifact
@@ -83,14 +99,14 @@ jobs:
     - name: Upload Artifact
       uses: actions/upload-artifact@v1
       with:
-        name: ${{ env.ARTIFACT_DIR }}
+        name: prcycoin-v${{ env.VERSION }}-x86_64-linux
         path: ${{ env.ARTIFACT_DIR }}
   build-win64:
     name: Build for Win64
     needs: create-source-distribution
     runs-on: ubuntu-18.04
     env:
-      ARTIFACT_DIR: prcycoin-v-win64
+      ARTIFACT_DIR: prcycoin-win64
     steps:
     - name: Getting Source
       uses: actions/download-artifact@v1
@@ -101,6 +117,11 @@ jobs:
         tar -xzf depends.tar.gz
         tar -xzf prcycoin.tar.gz --strip-components=1
       working-directory: ${{ env.SOURCE_ARTIFACT }}
+    - name: Set Env
+      shell: bash
+      run: |
+        export VERSION=$(cat $SOURCE_ARTIFACT/version.txt | sed 's/[^0-9,.]//g')
+        echo "VERSION=${VERSION}" >> $GITHUB_ENV
     - name: Install Required Packages
       run: |
         sudo apt-get update
@@ -115,7 +136,7 @@ jobs:
     - name: Build PRCY
       run: |
         ./autogen.sh
-        ./configure --disable-jni --disable-tests --disable-gui-tests --disable-bench --prefix=$(realpath depends/x86_64-w64-mingw32)
+        ./configure --disable-jni --disable-tests --disable-gui-tests --disable-bench --prefix=$(realpath depends/x86_64-w64-mingw32) --enable-upnp-default
         make -j$(nproc)
         make deploy -j$(nproc)
       working-directory: ${{ env.SOURCE_ARTIFACT }}
@@ -127,14 +148,14 @@ jobs:
     - name: Upload Artifact
       uses: actions/upload-artifact@v1
       with:
-        name: ${{ env.ARTIFACT_DIR }}
+        name: prcycoin-v${{ env.VERSION }}-win64
         path: ${{ env.ARTIFACT_DIR }}
   build-win32:
     name: Build for Win32
     needs: create-source-distribution
     runs-on: ubuntu-18.04
     env:
-      ARTIFACT_DIR: prcycoin-v-win32
+      ARTIFACT_DIR: prcycoin-win32
     steps:
     - name: Getting Source
       uses: actions/download-artifact@v1
@@ -145,6 +166,11 @@ jobs:
         tar -xzf depends.tar.gz
         tar -xzf prcycoin.tar.gz --strip-components=1
       working-directory: ${{ env.SOURCE_ARTIFACT }}
+    - name: Set Env
+      shell: bash
+      run: |
+        export VERSION=$(cat $SOURCE_ARTIFACT/version.txt | sed 's/[^0-9,.]//g')
+        echo "VERSION=${VERSION}" >> $GITHUB_ENV
     - name: Install Required Packages
       run: |
         sudo apt-get update
@@ -158,7 +184,7 @@ jobs:
     - name: Build PRCY
       run: |
         ./autogen.sh
-        ./configure --disable-jni --disable-tests --disable-gui-tests --disable-bench --prefix=$(realpath depends/i686-w64-mingw32)
+        ./configure --disable-jni --disable-tests --disable-gui-tests --disable-bench --prefix=$(realpath depends/i686-w64-mingw32) --enable-upnp-default
         make -j$(nproc)
         make deploy -j$(nproc)
       working-directory: ${{ env.SOURCE_ARTIFACT }}
@@ -170,14 +196,14 @@ jobs:
     - name: Upload Artifact
       uses: actions/upload-artifact@v1
       with:
-        name: ${{ env.ARTIFACT_DIR }}
+        name: prcycoin-v${{ env.VERSION }}-win32
         path: ${{ env.ARTIFACT_DIR }}
   build-osx64:
     name: Build for MacOSX
     needs: create-source-distribution
     runs-on: ubuntu-18.04
     env:
-      ARTIFACT_DIR: prcycoin-v-macosx
+      ARTIFACT_DIR: prcycoin-macosx
     steps:
     - name: Getting Source
       uses: actions/download-artifact@v1
@@ -188,6 +214,11 @@ jobs:
         tar -xzf depends.tar.gz
         tar -xzf prcycoin.tar.gz --strip-components=1
       working-directory: ${{ env.SOURCE_ARTIFACT }}
+    - name: Set Env
+      shell: bash
+      run: |
+        export VERSION=$(cat $SOURCE_ARTIFACT/version.txt | sed 's/[^0-9,.]//g')
+        echo "VERSION=${VERSION}" >> $GITHUB_ENV
     - name: Install Required Packages
       run: |
         sudo apt-get update
@@ -205,7 +236,7 @@ jobs:
     - name: Build PRCY
       run: |
         ./autogen.sh
-        ./configure --disable-jni --disable-tests --disable-gui-tests --disable-bench --prefix=$(realpath depends/x86_64-apple-darwin16)
+        ./configure --disable-jni --disable-tests --disable-gui-tests --disable-bench --prefix=$(realpath depends/x86_64-apple-darwin16) --enable-upnp-default
         make -j$(nproc)
         make deploy -j$(nproc)
       working-directory: ${{ env.SOURCE_ARTIFACT }}
@@ -216,14 +247,14 @@ jobs:
     - name: Upload Artifact
       uses: actions/upload-artifact@v1
       with:
-        name: ${{ env.ARTIFACT_DIR }}
+        name: prcycoin-v${{ env.VERSION }}-macosx
         path: ${{ env.ARTIFACT_DIR }}
   build-aarch64-linux:
     name: Build for ARM Linux 64bit
     needs: create-source-distribution
     runs-on: ubuntu-18.04
     env:
-      ARTIFACT_DIR: prcycoin-v-aarch64-linux
+      ARTIFACT_DIR: prcycoin-aarch64-linux
     steps:
     - name: Getting Source
       uses: actions/download-artifact@v1
@@ -234,6 +265,11 @@ jobs:
         tar -xzf depends.tar.gz
         tar -xzf prcycoin.tar.gz --strip-components=1
       working-directory: ${{ env.SOURCE_ARTIFACT }}
+    - name: Set Env
+      shell: bash
+      run: |
+        export VERSION=$(cat $SOURCE_ARTIFACT/version.txt | sed 's/[^0-9,.]//g')
+        echo "VERSION=${VERSION}" >> $GITHUB_ENV
     - name: Install Required Packages
       run: |
         sudo apt-get update
@@ -244,7 +280,7 @@ jobs:
     - name: Build PRCY
       run: |
         ./autogen.sh
-        ./configure --disable-jni --disable-tests --disable-gui-tests --disable-bench --prefix=$(realpath depends/aarch64-linux-gnu)
+        ./configure --disable-jni --disable-tests --disable-gui-tests --disable-bench --prefix=$(realpath depends/aarch64-linux-gnu) --enable-upnp-default
         make -j$(nproc)
       working-directory: ${{ env.SOURCE_ARTIFACT }}
     - name: Prepare Files for Artifact
@@ -255,14 +291,14 @@ jobs:
     - name: Upload Artifact
       uses: actions/upload-artifact@v1
       with:
-        name: ${{ env.ARTIFACT_DIR }}
+        name: prcycoin-v${{ env.VERSION }}-aarch64-linux
         path: ${{ env.ARTIFACT_DIR }}
   build-arm-linux-gnueabihf:
     name: Build for ARM Linux 32bit
     needs: create-source-distribution
     runs-on: ubuntu-18.04
     env:
-      ARTIFACT_DIR: prcycoin-v-arm32
+      ARTIFACT_DIR: prcycoin-arm32
     steps:
     - name: Getting Source
       uses: actions/download-artifact@v1
@@ -273,6 +309,11 @@ jobs:
         tar -xzf depends.tar.gz
         tar -xzf prcycoin.tar.gz --strip-components=1
       working-directory: ${{ env.SOURCE_ARTIFACT }}
+    - name: Set Env
+      shell: bash
+      run: |
+        export VERSION=$(cat $SOURCE_ARTIFACT/version.txt | sed 's/[^0-9,.]//g')
+        echo "VERSION=${VERSION}" >> $GITHUB_ENV
     - name: Install Required Packages
       run: |
         sudo apt-get update
@@ -283,7 +324,7 @@ jobs:
     - name: Build PRCY
       run: |
         ./autogen.sh
-        ./configure --disable-jni --disable-tests --disable-gui-tests --disable-bench --prefix=$(realpath depends/arm-linux-gnueabihf) --enable-glibc-back-compat --enable-reduce-exports LDFLAGS=-static-libstdc++
+        ./configure --disable-jni --disable-tests --disable-gui-tests --disable-bench --prefix=$(realpath depends/arm-linux-gnueabihf) --enable-glibc-back-compat --enable-reduce-exports LDFLAGS=-static-libstdc++ --enable-upnp-default
         make -j$(nproc)
       working-directory: ${{ env.SOURCE_ARTIFACT }}
     - name: Prepare Files for Artifact
@@ -294,14 +335,14 @@ jobs:
     - name: Upload Artifact
       uses: actions/upload-artifact@v1
       with:
-        name: ${{ env.ARTIFACT_DIR }}
+        name: prcycoin-v${{ env.VERSION }}-arm32
         path: ${{ env.ARTIFACT_DIR }}
   build-riscv64-linux-gnu:
     name: Build for RISC-V 64-bit
     needs: create-source-distribution
     runs-on: ubuntu-18.04
     env:
-      ARTIFACT_DIR: prcycoin-v-riscv64
+      ARTIFACT_DIR: prcycoin-riscv64
     steps:
     - name: Getting Source
       uses: actions/download-artifact@v1
@@ -312,6 +353,11 @@ jobs:
         tar -xzf depends.tar.gz
         tar -xzf prcycoin.tar.gz --strip-components=1
       working-directory: ${{ env.SOURCE_ARTIFACT }}
+    - name: Set Env
+      shell: bash
+      run: |
+        export VERSION=$(cat $SOURCE_ARTIFACT/version.txt | sed 's/[^0-9,.]//g')
+        echo "VERSION=${VERSION}" >> $GITHUB_ENV
     - name: Install Required Packages
       run: |
         sudo apt-get update
@@ -322,7 +368,7 @@ jobs:
     - name: Build PRCY
       run: |
         ./autogen.sh
-        ./configure --disable-jni --disable-tests --disable-gui-tests --disable-bench --prefix=$(realpath depends/riscv64-linux-gnu) --enable-reduce-exports LDFLAGS=-static-libstdc++
+        ./configure --disable-jni --disable-tests --disable-gui-tests --disable-bench --prefix=$(realpath depends/riscv64-linux-gnu) --enable-reduce-exports LDFLAGS=-static-libstdc++ --enable-upnp-default
         make -j$(nproc)
       working-directory: ${{ env.SOURCE_ARTIFACT }}
     - name: Prepare Files for Artifact
@@ -333,5 +379,5 @@ jobs:
     - name: Upload Artifact
       uses: actions/upload-artifact@v1
       with:
-        name: ${{ env.ARTIFACT_DIR }}
+        name: prcycoin-v${{ env.VERSION }}-riscv64
         path: ${{ env.ARTIFACT_DIR }}

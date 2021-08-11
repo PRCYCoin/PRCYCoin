@@ -175,6 +175,20 @@ UniValue getsupply(const UniValue& params, bool fHelp)
     return ValueFromAmount(chainActive.Tip()->nMoneySupply);
 }
 
+UniValue getmaxsupply(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+            "getmaxsupply\n"
+            "\nReturns the max supply.\n"
+            "\nResult:\n"
+            "n    (numeric) The maximum supply\n"
+            "\nExamples:\n" +
+            HelpExampleCli("getmaxsupply", "") + HelpExampleRpc("getmaxsupply", ""));
+
+    return ValueFromAmount(Params().TOTAL_SUPPLY);
+}
+
 UniValue getblockcount(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)

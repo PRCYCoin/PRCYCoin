@@ -746,7 +746,7 @@ bool ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue, CW
             std::pair<bool, CAmount> pSettings;
             ssValue >> pSettings;
             pwallet->fCombineDust = true;//pSettings.first;
-            pwallet->nAutoCombineThreshold = 150 * COIN;//pSettings.second;
+            pwallet->nAutoCombineThreshold = 150;//pSettings.second;
         } else if (strType == "destdata") {
             std::string strAddress, strKey, strValue;
             ssKey >> strAddress;

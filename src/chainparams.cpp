@@ -3,27 +3,22 @@
 // Copyright (c) 2014-2015 The Dash developers
 // Copyright (c) 2015-2018 The PIVX developers
 // Copyright (c) 2018-2020 The DAPS Project developers
+// Copyright (c) 2020-2021 The PRCY developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include "chainparams.h"
-#include "random.h"
+
+#include "chainparamsseeds.h"
 #include "util.h"
 #include "utilstrencodings.h"
 
-#include <assert.h>
-
 #include <boost/assign/list_of.hpp>
+
+#include <assert.h>
 
 using namespace std;
 using namespace boost::assign;
-
-struct SeedSpec6 {
-    uint8_t addr[16];
-    uint16_t port;
-};
-
-#include "chainparamsseeds.h"
 
 std::string CDNSSeedData::getHost(uint64_t requiredServiceBits) const {
     //use default host for non-filter-capable seeds or if we use the default service bits (NODE_NETWORK)
@@ -36,29 +31,13 @@ std::string CDNSSeedData::getHost(uint64_t requiredServiceBits) const {
 /**
  * Main network
  */
-
-//! Convert the pnSeeds6 array into usable address objects.
-static void convertSeed6(std::vector<CAddress>& vSeedsOut, const SeedSpec6* data, unsigned int count)
-{
-    // It'll only connect to one or two seed nodes because once it connects,
-    // it'll get a pile of addresses with newer timestamps.
-    // Seed nodes are given a random 'last seen time' of between one and two
-    // weeks ago.
-    const int64_t nOneWeek = 7 * 24 * 60 * 60;
-    for (unsigned int i = 0; i < count; i++) {
-        struct in6_addr ip;
-        memcpy(&ip, data[i].addr, sizeof(ip));
-        CAddress addr(CService(ip, data[i].port));
-        addr.nTime = GetTime() - GetRand(nOneWeek) - nOneWeek;
-        vSeedsOut.push_back(addr);
-    }
-}
-
-//   What makes a good checkpoint block?
-// + Is surrounded by blocks with reasonable timestamps
-//   (no blocks before with a timestamp after, none after with
-//    timestamp before)
-// + Contains no strange transactions
+/**
+ * What makes a good checkpoint block?
+ * + Is surrounded by blocks with reasonable timestamps
+ *   (no blocks before with a timestamp after, none after with
+ *    timestamp before)
+ * + Contains no strange transactions
+ */
 static Checkpoints::MapCheckpoints mapCheckpoints =
     boost::assign::map_list_of
     (0, uint256("000006957e238ff4e6bcf00c8a7d1b3e7249c0a2109b0391d8740821a40c1d8c"))
@@ -66,23 +45,32 @@ static Checkpoints::MapCheckpoints mapCheckpoints =
     (561, uint256("54872c72e81b34117bc5a6095d6f1b8d85746992d2513d7adc90a2aceed1651e")) // First PoA Block
     (562, uint256("0f00d3a6636c8a265724764da082fdef8106fce7057dfdda94ab6537f7211b4f")) // First Block after PoA
     (14905, uint256("6389ecdb851500d9467b41a54d02c58b1542bfc2d5c99339821c89d25135a4b0")) // Chain split
-	(17128, uint256("98d76615ef96b3ced1d9902715ba432393335b791b2256936883c323f0bb91f4"))
-	(17133, uint256("d9dcec83e8a675db0f7b6d28fde591f494a1b0766f7cb56ea8d8cb95348f835b"))
-	(17150, uint256("bad4dccf8fd86f00d6c215802d39342e4de64e21155b76b38f0182ba7d96edd2"))
+    (17128, uint256("98d76615ef96b3ced1d9902715ba432393335b791b2256936883c323f0bb91f4"))
+    (17133, uint256("d9dcec83e8a675db0f7b6d28fde591f494a1b0766f7cb56ea8d8cb95348f835b"))
+    (17150, uint256("bad4dccf8fd86f00d6c215802d39342e4de64e21155b76b38f0182ba7d96edd2"))
     (17153, uint256("4e63d92ac5209f0a342c2e74098778bbe36324de66734ff41132c7f3db3ad628"))
     (18375, uint256("c291cf0a7bcd73a91c6f68d28dc6ce9e1acee973fd134f4250c1ee80bf3d0c03"))
     (18813, uint256("ccf401e6fb24f34c105b2f693c2eb75c2ba7a2a4e3ffbbfe152e98ae9806d418"))
     (18814, uint256("f8092b5c474cc260edb7c378c4f7e2123b007a55018d32f97b9b729f729067ae"))
-    (19317, uint256("0bd530827eff9bdc79893739c02c14c02bb35a39b943eaeeb72e04767e0597a5"))	
+    (19317, uint256("0bd530827eff9bdc79893739c02c14c02bb35a39b943eaeeb72e04767e0597a5"))    
     (19400, uint256("cdeebfe4fdeda461ab2025d08248e89b13a1e970c76b91ac2788837c147e6f33"))
     (77852, uint256("e6ec3ddccfb6bd378ca3cf5cc292c011ec235536a9edbb8c3fdbe17abd921d44"))
+    (98715, uint256("04b3cfde139af89ddacf3cb790daf734e4953119c4a58da9b8f07be888271670"))
     (98768, uint256("43f42aaba4a1e8f7a4981b7d8620e5967974b0bbdee4ae22e42f14585be3a52f"))
     (105629, uint256("82ae47c00a0338f33a41b8505162cabaa4740f2187feb07f4ee4bc6138461acb"))
+    (129267, uint256("773de63a6ef8cd4d56769a0efc8625fa617bbac34802019b3a211bbe390f34a6"))
+    (132020, uint256("d93d3f4b85dd3f3995d010966f8e0163f324bfe3e748507fadf472a14c76ce36"))
+    (133535, uint256("33d415384dc2d181f9cd0208d6c8664dfdbfb95a061a639220b4ea253df7788c"))
+    (140352, uint256("cdef2002ee6d10a0a8e85ba47329455773245e6008aa691416b63d7ec3aef78d"))
+    (155115, uint256("ea78ac399244d06b407ff349ba71747d8c672ccd54216317abc28dbca04c71e5")) // A PoA block was rejected here, avoid it
+    (155116, uint256("929d16db920af3df60cf2e869ee08d174f7d476d65e53cbf07d54b7d1cca2380")) // First PoA Block after fix/difficulty bump
+    (193949, uint256("98ed9238e67297071a13b6e62fa17c5c992998a295ea7535cdcd4c3dda8aeab3")) // First PoA Block after fix/difficulty bump
+    (260162, uint256("97d593c9ebbcc219eeed822f05ba4291e7dcc4c3667836dbfe29667fe31808a7"))
     ;
 static const Checkpoints::CCheckpointData data = {
     &mapCheckpoints,
-    1614113250,          // * UNIX timestamp of last checkpoint block
-    219212,          // * total number of transactions between genesis and last checkpoint
+    1623031617,          // * UNIX timestamp of last checkpoint block
+    533276,          // * total number of transactions between genesis and last checkpoint
                 //   (the tx=... number in the SetBestChain debug.log lines)
     1440        // * estimated number of transactions per day after checkpoint
 };
@@ -133,16 +121,23 @@ public:
         nMasternodeCountDrift = 20;
         MAX_MONEY = 70000000.0;
         nMaxMoneyOut = MAX_MONEY * COIN;
+        nMNCollateralAmt = 5000 * COIN;
+        nMinimumStakeAmount = 2500 * COIN;
 
         /** Height or Time Based Activations **/
         nLastPOWBlock = 500;
         nStartPOABlock = 560;
-//        nRemoveRewardBlock = 6000;
         nModifierUpdateBlock = 615800;
         nPoABlockTime = 60 * 60; //a PoA block every 60 minutes
         nMinNumPoSBlocks = 59;
-        nMaxNumPoSBlocks = 120;
+        nMaxNumPoSBlocks = 65;
         nSoftForkBlock = 120000; // Soft fork block for difficulty change
+        nPoANewDiff = 150000; // New PoA difficulty
+        nBIP65ActivationHeight = 125000; // Last v3 block was 124712, leave a bit of padding
+        nPoAFixTime = 1616716800; // Fork time for PoA fix - Friday, March 26, 2021 12:00:00 AM (GMT)
+        nPoAPaddingBlock = 169869; // Last block with 120 PoS blocks in a PoA Audit
+        nPoAPadding = 10; // Current PoA Padding
+        nHardForkBlock = 370000; // Add hard fork block for Consensus/PoA Padding
 
         /**
          * Build the genesis block. Note that the output of the genesis coinbase cannot
@@ -206,28 +201,36 @@ public:
         assert(genesis.hashMerkleRoot == uint256("cd01f1ca20c22b336f1ee83af9fd8b7facbf42083bf3bed49af045f5cadc9cd4"));
 
         // nodes with support for servicebits filtering should be at the top
-        vSeeds.push_back(CDNSSeedData("seed.prcycoin.com", "seed.prcycoin.com"));        // Single node address
+        vSeeds.push_back(CDNSSeedData("seed.prcycoin.com", "seed.prcycoin.com"));          // Single node address
         vSeeds.push_back(CDNSSeedData("seed1.prcycoin.com", "seed1.prcycoin.com"));        // Single node address
         vSeeds.push_back(CDNSSeedData("seed2.prcycoin.com", "seed2.prcycoin.com"));        // Single node address
         vSeeds.push_back(CDNSSeedData("seed3.prcycoin.com", "seed3.prcycoin.com"));        // Single node address
         vSeeds.push_back(CDNSSeedData("seed4.prcycoin.com", "seed4.prcycoin.com"));        // Single node address
         vSeeds.push_back(CDNSSeedData("seed5.prcycoin.com", "seed5.prcycoin.com"));        // Single node address
-        vSeeds.push_back(CDNSSeedData("vps.prcycoin.com", "vps.prcycoin.com"));        // Single node address
-        vSeeds.push_back(CDNSSeedData("vps1.prcycoin.com", "vps1.prcycoin.com"));        // Single node address
-        vSeeds.push_back(CDNSSeedData("vps2.prcycoin.com", "vps2.prcycoin.com"));        // Single node address
-        vSeeds.push_back(CDNSSeedData("vps3.prcycoin.com", "vps3.prcycoin.com"));        // Single node address
-        vSeeds.push_back(CDNSSeedData("vps4.prcycoin.com", "vps4.prcycoin.com"));        // Single node address
-        vSeeds.push_back(CDNSSeedData("vps5.prcycoin.com", "vps5.prcycoin.com"));        // Single node address
+        vSeeds.push_back(CDNSSeedData("seed6.prcycoin.com", "seed6.prcycoin.com"));        // Single node address
+        vSeeds.push_back(CDNSSeedData("seed7.prcycoin.com", "seed7.prcycoin.com"));        // Single node address
+        vSeeds.push_back(CDNSSeedData("seed8.prcycoin.com", "seed8.prcycoin.com"));        // Single node address
+        vSeeds.push_back(CDNSSeedData("seed9.prcycoin.com", "seed9.prcycoin.com"));        // Single node address
+        vSeeds.push_back(CDNSSeedData("vps.prcycoin.com", "vps.prcycoin.com"));            // Single node address
+        vSeeds.push_back(CDNSSeedData("vps1.prcycoin.com", "vps1.prcycoin.com"));          // Single node address
+        vSeeds.push_back(CDNSSeedData("vps2.prcycoin.com", "vps2.prcycoin.com"));          // Single node address
+        vSeeds.push_back(CDNSSeedData("vps3.prcycoin.com", "vps3.prcycoin.com"));          // Single node address
+        vSeeds.push_back(CDNSSeedData("vps4.prcycoin.com", "vps4.prcycoin.com"));          // Single node address
+        vSeeds.push_back(CDNSSeedData("vps5.prcycoin.com", "vps5.prcycoin.com"));          // Single node address
+        vSeeds.push_back(CDNSSeedData("vps6.prcycoin.com", "vps6.prcycoin.com"));          // Single node address
+        vSeeds.push_back(CDNSSeedData("vps7.prcycoin.com", "vps7.prcycoin.com"));          // Single node address
+        vSeeds.push_back(CDNSSeedData("vps8.prcycoin.com", "vps8.prcycoin.com"));          // Single node address
+        vSeeds.push_back(CDNSSeedData("vps9.prcycoin.com", "vps9.prcycoin.com"));          // Single node address
 
         base58Prefixes[PUBKEY_ADDRESS] = std::vector<unsigned char>(1, 55);
         base58Prefixes[SCRIPT_ADDRESS] = std::vector<unsigned char>(1, 61);
         base58Prefixes[SECRET_KEY] = std::vector<unsigned char>(1, 28);
         base58Prefixes[EXT_PUBLIC_KEY] = boost::assign::list_of(0x57)(0x4D)(0x12)(0x23).convert_to_container<std::vector<unsigned char> >();
         base58Prefixes[EXT_SECRET_KEY] = boost::assign::list_of(0x57)(0x41)(0x71)(0x65).convert_to_container<std::vector<unsigned char> >();
-        // 	BIP44 coin type is from https://github.com/satoshilabs/slips/blob/master/slip-0044.md
+        //  BIP44 coin type is from https://github.com/satoshilabs/slips/blob/master/slip-0044.md
         nExtCoinType = 0x80000355;
 
-        convertSeed6(vFixedSeeds, pnSeed6_main, ARRAYLEN(pnSeed6_main));
+        vFixedSeeds = std::vector<SeedSpec6>(pnSeed6_main, pnSeed6_main + ARRAYLEN(pnSeed6_main));
 
         fRequireRPCPassword = true;
         fMiningRequiresPeers = true;
@@ -274,20 +277,22 @@ public:
         nTargetSpacing = 1 * 60;  // PRCYcoin: 1 minute
         nLastPOWBlock = 500;
         nStartPOABlock = 560;
-//        nRemoveRewardBlock = 6000;
         nPoABlockTime = 30 * 60;  //1 PoA block every 30 minutes
-        nMinNumPoSBlocks = 20;
+        nMinNumPoSBlocks = 29;
+        nMaxNumPoSBlocks = 33;
         nMaturity = 15;
         nMasternodeCountDrift = 4;
         nModifierUpdateBlock = 51197; //approx Mon, 17 Apr 2017 04:00:00 GMT
-        MAX_MONEY = 5000000000.0;
+        MAX_MONEY = 70000000.0;
         nMaxMoneyOut = MAX_MONEY * COIN;
-        nBlockEnforceSerialRange = 1; //Enforce serial range starting this block
-        nBlockRecalculateAccumulators = 9908000; //Trigger a recalculation of accumulators
-        nBlockFirstFraudulent = 9891737; //First block that bad serials emerged
-        nBlockLastGoodCheckpoint = 9891730; //Last valid accumulator checkpoint
-        nBlockEnforceInvalidUTXO = 9902850; //Start enforcing the invalid UTXO's
-        nSoftForkBlock = 0; // Soft fork block for difficulty change - testnet started with it
+        nMNCollateralAmt = 5000 * COIN;
+        nSoftForkBlock = 600; // Soft fork block for difficulty change - testnet started with it
+        nPoANewDiff = 650;
+        nBIP65ActivationHeight = 0;
+        nPoAFixTime = 1616277580; // Fork time for PoA fix - Saturday, March 20, 2021 22:00:00 AM (GMT)
+        nPoAPaddingBlock = 0;
+        nPoAPadding = 5; // Current PoA Padding
+        nHardForkBlock = 700; // Add hard fork block for Consensus/PoA Padding
 
         //! Modify the testnet genesis block so the timestamp is valid for a later start.
         genesis.nTime = 1608422400;
@@ -340,7 +345,7 @@ public:
         // Testnet prcycoin BIP44 coin type is '1' (All coin's testnet default)
         nExtCoinType = 0x80000001;
 
-        convertSeed6(vFixedSeeds, pnSeed6_test, ARRAYLEN(pnSeed6_test));
+        vFixedSeeds = std::vector<SeedSpec6>(pnSeed6_test, pnSeed6_test + ARRAYLEN(pnSeed6_test));
 
         fRequireRPCPassword = true;
         fMiningRequiresPeers = true;

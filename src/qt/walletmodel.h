@@ -136,6 +136,8 @@ public:
     QAbstractTableModel* getTxTableModel();
     RecentRequestsTableModel* getRecentRequestsTableModel();
 
+    bool isShutdownRequested();
+
     CAmount getBalance(const CCoinControl* coinControl = NULL) const;
     CAmount getUnconfirmedBalance() const;
     CAmount getImmatureBalance() const;

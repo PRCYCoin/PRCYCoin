@@ -102,15 +102,11 @@ void HistoryPage::on_cellClicked(int row, int column)
     //2 is column index for address
     cell = ui->tableView->item(row, 2);
     QString address = cell->data(0).toString();
+    //3 is column index for amount
+    cell = ui->tableView->item(row, 3);
+    QString amount = cell->data(0).toString();
     std::string stdAddress = address.trimmed().toStdString();
     if (pwalletMain->addrToTxHashMap.count(stdAddress) == 1) {
-        // QMessageBox txHashShow;
-        // txHashShow.setText("Transaction Hash.");
-        // txHashShow.setInformativeText(pwalletMain->addrToTxHashMap[stdAddress].c_str());
-        // txHashShow.setStyleSheet(GUIUtil::loadStyleSheet());
-        // txHashShow.setStyleSheet("QMessageBox {messagebox-text-interaction-flags: 5;}");
-        // txHashShow.exec();
-
         RevealTxDialog txdlg;
         txdlg.setStyleSheet(GUIUtil::loadStyleSheet());
 
@@ -149,6 +145,7 @@ void HistoryPage::on_cellClicked(int row, int column)
                         }
                     }
                 }
+                txdlg.setTxAmount(amount);
                 txdlg.setTxFee(tx.nTxFee);
             }
         }

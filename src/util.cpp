@@ -229,7 +229,7 @@ bool LogAcceptCategory(const char* category)
             const vector<string>& categories = mapMultiArgs["-debug"];
             ptrCategory.reset(new set<string>(categories.begin(), categories.end()));
             // thread_specific_ptr automatically deletes the set when the thread ends.
-            // "prcycoin" is a composite category enabling all DAP-related debug output
+            // "prcycoin" is a composite category enabling all PRCY-related debug output
             if (ptrCategory->count(string("prcycoin"))) {
                 ptrCategory->insert(string("obfuscation"));
                 ptrCategory->insert(string("swiftx"));
@@ -237,6 +237,8 @@ bool LogAcceptCategory(const char* category)
                 ptrCategory->insert(string("mnpayments"));
                 ptrCategory->insert(string("poa"));
                 ptrCategory->insert(string("mnbudget"));
+                ptrCategory->insert(string("staking"));
+                ptrCategory->insert(string("autocombine"));
             }
         }
         const set<string>& setCategories = *ptrCategory.get();

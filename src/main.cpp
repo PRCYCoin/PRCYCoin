@@ -648,42 +648,17 @@ bool ReVerifyPoSBlock(CBlockIndex* pindex)
         nValueOut = coinstake.GetValueOut();
 
         size_t numUTXO = coinstake.vout.size();
-        CAmount posBlockReward = PoSBlockReward();
         if (mapBlockIndex.count(block.hashPrevBlock) < 1) {
             LogPrintf("ReVerifyPoSBlock() : Previous block not found, received block %s, previous %s, current tip %s", block.GetHash().GetHex(), block.hashPrevBlock.GetHex(), chainActive.Tip()->GetBlockHash().GetHex());
             return false;
         }
-        int thisBlockHeight = mapBlockIndex[block.hashPrevBlock]->nHeight + 1; //avoid potential block disorder during download
-        CAmount blockValue = GetBlockValue(mapBlockIndex[block.hashPrevBlock]);
-        /*if (blockValue > posBlockReward) {
-            numUTXO - 1 is team rewards, numUTXO - 2 is masternode reward
-            const CTxOut& mnOut = coinstake.vout[numUTXO - 2];
-            std::string mnsa(mnOut.masternodeStealthAddress.begin(), mnOut.masternodeStealthAddress.end());
-            if (!VerifyDerivedAddress(mnOut, mnsa)) {
-                LogPrintf("ReVerifyPoSBlock() : Incorrect derived address for masternode rewards");
-                return false;
-            }
-
-            CAmount teamReward = blockValue - posBlockReward;
-            const CTxOut& foundationOut = coinstake.vout[numUTXO - 1];
-            if (foundationOut.nValue != teamReward) {
-                LogPrintf("ReVerifyPoSBlock() : Incorrect amount PoS rewards for foundation, reward = %d while the correct reward = %d", foundationOut.nValue, teamReward);
-                return false;
-            }
-
-            if (!VerifyDerivedAddress(foundationOut, FOUNDATION_WALLET)) {
-                LogPrintf("ReVerifyPoSBlock() : Incorrect derived address PoS rewards for foundation");
-                return false;
-            }
-        } else {*/
-            //there is no team rewards in this block
-            const CTxOut& mnOut = coinstake.vout[numUTXO - 1];
-            std::string mnsa(mnOut.masternodeStealthAddress.begin(), mnOut.masternodeStealthAddress.end());
-            if (!VerifyDerivedAddress(mnOut, mnsa)) {
-                LogPrintf("ReVerifyPoSBlock() : Incorrect derived address for masternode rewards");
-                return false;
-            }
-        //}
+        CAmount blockValue = GetBlockValue(mapBlockIndex[block.hashPrevBlock]->nHeight);
+        const CTxOut& mnOut = coinstake.vout[numUTXO - 1];
+        std::string mnsa(mnOut.masternodeStealthAddress.begin(), mnOut.masternodeStealthAddress.end());
+        if (!VerifyDerivedAddress(mnOut, mnsa)) {
+            LogPrintf("ReVerifyPoSBlock() : Incorrect derived address for masternode rewards");
+            return false;
+        }
 
         // track money supply and mint amount info
         CAmount nMoneySupplyPrev = pindex->pprev ? pindex->pprev->nMoneySupply : 0;
@@ -692,7 +667,7 @@ bool ReVerifyPoSBlock(CBlockIndex* pindex)
         pindex->nMint = pindex->nMoneySupply - nMoneySupplyPrev + nFees;
 
         //PoW phase redistributed fees to miner. PoS stage destroys fees.
-        CAmount nExpectedMint = GetBlockValue(pindex->pprev);
+        CAmount nExpectedMint = GetBlockValue(pindex->pprev->nHeight);
         nExpectedMint += nFees;
 
         if (!IsBlockValueValid(block, nExpectedMint, pindex->nMint)) {
@@ -1402,22 +1377,6 @@ int GetIXConfirmations(uint256 nTXHash)
     return 0;
 }
 
-bool IsSerialInBlockchain(const CBigNum& bnSerial, int& nHeightTx)
-{
-    uint256 txHash = 0;
-
-    CTransaction tx;
-    uint256 hashBlock;
-    if (!GetTransaction(txHash, tx, hashBlock, true))
-        return false;
-
-    bool inChain = mapBlockIndex.count(hashBlock) && chainActive.Contains(mapBlockIndex[hashBlock]);
-    if (inChain)
-        nHeightTx = mapBlockIndex.at(hashBlock)->nHeight;
-
-    return inChain;
-}
-
 bool VerifyShnorrKeyImageTxIn(const CTxIn& txin, uint256 ctsHash)
 {
     COutPoint prevout = txin.prevout;
@@ -1474,7 +1433,7 @@ bool VerifyShnorrKeyImageTx(const CTransaction& tx)
     return VerifyShnorrKeyImageTxIn(tx.vin[0], cts);
 }
 
-bool CheckTransaction(const CTransaction& tx, bool fzcActive, bool fRejectBadUTXO, CValidationState& state)
+bool CheckTransaction(const CTransaction& tx, bool fRejectBadUTXO, CValidationState& state)
 {
     // Basic checks that don't depend on any context
     if (tx.vin.empty())
@@ -1635,7 +1594,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState& state, const CTransa
         *pfMissingInputs = false;
 
     // Check transaction
-    if (!CheckTransaction(tx, false, true, state))
+    if (!CheckTransaction(tx, true, state))
         return state.DoS(100, error("%s : CheckTransaction failed", __func__), REJECT_INVALID, "bad-tx");
 
     // Coinbase is only valid in a block, not as a loose transaction
@@ -1673,11 +1632,18 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState& state, const CTransa
                 return false;
             }
 
+            int banscore;
             if (!tx.IsCoinStake() && !tx.IsCoinBase() && !tx.IsCoinAudit()) {
                 if (!tx.IsCoinAudit()) {
-                    if (!VerifyRingSignatureWithTxFee(tx, chainActive.Tip()))
-                        return state.DoS(100, error("AcceptToMemoryPool() : Ring Signature check for transaction %s failed", tx.GetHash().ToString()),
+                    if (masternodeSync.IsBlockchainSynced()) {
+                        banscore = 100;
+                    } else {
+                        banscore = 1;
+                    }
+                    if (!VerifyRingSignatureWithTxFee(tx, chainActive.Tip())) {
+                        return state.DoS(banscore, error("AcceptToMemoryPool() : Ring Signature check for transaction %s failed", tx.GetHash().ToString()),
                             REJECT_INVALID, "bad-ring-signature");
+                    }
                     if (!VerifyBulletProofAggregate(tx))
                         return state.DoS(100, error("AcceptToMemoryPool() : Bulletproof check for transaction %s failed", tx.GetHash().ToString()),
                             REJECT_INVALID, "bad-bulletproof");
@@ -1759,12 +1725,12 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState& state, const CTransa
             }
         }
 
-        bool fCLTVHasMajority = CBlockIndex::IsSuperMajority(5, chainActive.Tip(), Params().EnforceBlockUpgradeMajority());
+        bool fCLTVIsActivated = chainActive.Tip()->nHeight >= Params().BIP65ActivationHeight();
 
         // Check against previous transactions
         // This is done last to help prevent CPU exhaustion denial-of-service attacks.
         int flags = STANDARD_SCRIPT_VERIFY_FLAGS;
-        if (fCLTVHasMajority)
+        if (fCLTVIsActivated)
             flags |= SCRIPT_VERIFY_CHECKLOCKTIMEVERIFY;
         if (!CheckInputs(tx, state, view, true, flags, true)) {
             return error("AcceptToMemoryPool: ConnectInputs failed %s", hash.ToString());
@@ -1780,7 +1746,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState& state, const CTransa
         // invalid blocks, however allowing such transactions into the mempool
         // can be exploited as a DoS attack.
         flags = MANDATORY_SCRIPT_VERIFY_FLAGS;
-        if (fCLTVHasMajority)
+        if (fCLTVIsActivated)
             flags |= SCRIPT_VERIFY_CHECKLOCKTIMEVERIFY;
         if (!CheckInputs(tx, state, view, true, flags, true)) {
             return error(
@@ -1824,7 +1790,7 @@ bool AcceptableInputs(CTxMemPool& pool, CValidationState& state, const CTransact
 
     const int chainHeight = chainActive.Height();
 
-    if (!CheckTransaction(tx, false, true, state))
+    if (!CheckTransaction(tx, true, state))
         return error("AcceptableInputs: CheckTransaction failed");
 
     // Coinbase is only valid in a block, not as a loose transaction
@@ -1887,14 +1853,6 @@ bool AcceptableInputs(CTxMemPool& pool, CValidationState& state, const CTransact
                     if (pfMissingInputs)
                         *pfMissingInputs = true;
                     return false;
-                }
-
-                // check for invalid/fraudulent inputs
-                if (!ValidOutPoint(txin.prevout, chainHeight)) {
-                    return state.Invalid(
-                        error("%s : tried to spend invalid input %s in tx %s", __func__, txin.prevout.ToString(),
-                            tx.GetHash().GetHex()),
-                        REJECT_INVALID, "bad-txns-invalid-inputs");
                 }
             }
 
@@ -1978,12 +1936,12 @@ bool AcceptableInputs(CTxMemPool& pool, CValidationState& state, const CTransact
                 hash.ToString(),
                 nFees, ::minRelayTxFee.GetFee(nSize) * 10000);
 
-        bool fCLTVHasMajority = CBlockIndex::IsSuperMajority(5, chainActive.Tip(), Params().EnforceBlockUpgradeMajority());
+        bool fCLTVIsActivated = chainActive.Tip()->nHeight >= Params().BIP65ActivationHeight();
 
         // Check against previous transactions
         // This is done last to help prevent CPU exhaustion denial-of-service attacks.
         int flags = STANDARD_SCRIPT_VERIFY_FLAGS;
-        if (fCLTVHasMajority)
+        if (fCLTVIsActivated)
             flags |= SCRIPT_VERIFY_CHECKLOCKTIMEVERIFY;
         if (!CheckInputs(tx, state, view, false, flags, true)) {
             return error("AcceptableInputs: ConnectInputs failed %s", hash.ToString());
@@ -2153,64 +2111,24 @@ double ConvertBitsToDouble(unsigned int nBits)
     return dDiff;
 }
 
-CAmount PoSBlockReward()
-{
-    return 1 * COIN;
-}
-
-//CAmount TeamRewards(const CBlockIndex* ptip)
-//{
-//    const CBlockIndex* pForkTip = ptip;
-//    if (!ptip) {
-//        pForkTip = chainActive.Tip();
-//    }
-
-//    if (!pForkTip->IsProofOfAudit() || pForkTip->nHeight >= Params().REMOVE_REWARD_BLOCK()) return 0;
-//    const CBlockIndex* lastPoABlock = pForkTip;
-//    if (lastPoABlock->hashPrevPoABlock.IsNull()) {
-//        //pay prcy team after the first PoA block
-//        return (pForkTip->nHeight - Params().LAST_POW_BLOCK() - 1 + 1 /*+1 for the being created PoS block*/) * 0.5 * COIN;
-//    }
-
-    //loop back to find the PoA block right after which the prcy team is paid
-//    uint256 lastPoAHash = lastPoABlock->hashPrevPoABlock;
-//    CAmount ret = 0;
-//    int numPoABlocks = 1;
-//    while (!lastPoAHash.IsNull()) {
-//        if (numPoABlocks != 0 && numPoABlocks % Params().TEAM_REWARD_FREQUENCY == 0) break;
-//        CBlockIndex* p = mapBlockIndex[lastPoAHash];
-//        lastPoAHash = p->hashPrevPoABlock;
-//        numPoABlocks++;
-//    }
-
-//    if (!lastPoAHash.IsNull() && numPoABlocks != 0 && numPoABlocks % 24 == 0) {
-//        ret = (pForkTip->nHeight - (mapBlockIndex[lastPoAHash]->nHeight + 1) - numPoABlocks + 1 /*+1 for the being created PoS block*/) * 0.5 * COIN;
-//    }
-//    return ret;
-//}
-
-int64_t GetBlockValue(const CBlockIndex* ptip)
+CAmount GetBlockValue(int nHeight)
 {
     LOCK(cs_main);
     int64_t nSubsidy = 0;
-    const CBlockIndex* pForkTip = ptip;
-    if (!ptip) {
-        pForkTip = chainActive.Tip();
-    }
+    int64_t nMoneySupply = chainActive.Tip()->nMoneySupply;
 
-    if (pForkTip->nMoneySupply >= Params().TOTAL_SUPPLY) {
+    if (nMoneySupply >= Params().TOTAL_SUPPLY) {
         //zero rewards when total supply reach 70M PRCY
         return 0;
     }
-    if (pForkTip->nHeight < Params().LAST_POW_BLOCK()) {
+    if (nHeight < Params().LAST_POW_BLOCK()) {
         nSubsidy = 120000 * COIN;
     } else {
-        nSubsidy = PoSBlockReward();
- //       nSubsidy += TeamRewards(pForkTip);
+        nSubsidy = 1 * COIN;
     }
 
-    if (pForkTip->nMoneySupply + nSubsidy >= Params().TOTAL_SUPPLY) {
-        nSubsidy = Params().TOTAL_SUPPLY - pForkTip->nMoneySupply;
+    if (nMoneySupply + nSubsidy >= Params().TOTAL_SUPPLY) {
+        nSubsidy = Params().TOTAL_SUPPLY - nMoneySupply;
     }
 
     return nSubsidy;
@@ -2224,7 +2142,7 @@ CAmount GetSeeSaw(const CAmount& blockValue, int nMasternodeCount, int nHeight)
     }
 
     int64_t nMoneySupply = chainActive.Tip()->nMoneySupply;
-    int64_t mNodeCoins = nMasternodeCount * 5000 * COIN;
+    int64_t mNodeCoins = nMasternodeCount * Params().MNCollateralAmt();
 
     // Use this log to compare the masternode count for different clients
     LogPrintf("Adjusting seesaw at height %d with %d masternodes (without drift: %d) at %ld\n", nHeight,nMasternodeCount, nMasternodeCount - Params().MasternodeCountDrift(), GetTime());
@@ -2747,25 +2665,9 @@ CBitcoinAddress addressExp2("DTQYdnNqKuEHXyNeeYhPQGGGdqHbXYwjpj");
 map<COutPoint, COutPoint> mapInvalidOutPoints;
 map<CBigNum, CAmount> mapInvalidSerials;
 
-void AddInvalidSpendsToMap(const CBlock& block)
-{
-    //empty function
-}
-
 // Populate global map (mapInvalidOutPoints) of invalid/fraudulent OutPoints that are banned from being used on the chain.
 CAmount nFilteredThroughBittrex = 0;
 bool fListPopulatedAfterLock = false;
-
-void PopulateInvalidOutPointMap()
-{
-    //empty function
-}
-
-bool ValidOutPoint(const COutPoint out, int nHeight)
-{
-    bool isInvalid = nHeight >= Params().Block_Enforce_Invalid() && mapInvalidOutPoints.count(out);
-    return !isInvalid;
-}
 
 CAmount GetInvalidUTXOValue()
 {
@@ -3080,11 +2982,6 @@ bool RecalculatePRCYSupply(int nHeightStart)
     return true;
 }
 
-bool ReindexAccumulators(list<uint256>& listMissingCheckpoints, string& strError)
-{
-    return true;
-}
-
 static int64_t nTimeVerify = 0;
 static int64_t nTimeConnect = 0;
 static int64_t nTimeIndex = 0;
@@ -3115,22 +3012,33 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
     if (!fVerifyingBlocks && block.IsProofOfAudit()) {
         //Check PoA consensus rules
         if (!CheckPoAContainRecentHash(block)) {
-            return state.DoS(100, error("ConnectBlock(): PoA block should contain only non-audited recent PoS blocks"));
+            return state.DoS(100, error("ConnectBlock(): PoA block should contain only non-audited recent PoS blocks"),
+                REJECT_INVALID, "blocks-already-audited");
         }
 
         if (!CheckNumberOfAuditedPoSBlocks(block, pindex)) {
-            return state.DoS(100, error("ConnectBlock(): A PoA block should audit at least 59 PoS blocks and no more than 120 PoS blocks"));
+            return state.DoS(100, error("ConnectBlock(): A PoA block should audit at least 59 PoS blocks and no more than 120 PoS blocks (65 max after block 169869)"),
+                             REJECT_INVALID, "incorrect-number-audited-blocks");
         }
 
         if (!CheckPoABlockNotContainingPoABlockInfo(block, pindex)) {
-            return state.DoS(100, error("ConnectBlock(): A PoA block should not audit any existing PoA blocks"));
+            return state.DoS(100, error("ConnectBlock(): A PoA block should not audit any existing PoA blocks"),
+                             REJECT_INVALID, "auditing-poa-block");
         }
 
         if (!CheckPoABlockRewardAmount(block, pindex)) {
-            return state.DoS(100, error("ConnectBlock(): This PoA block reward does not match the value it should"));
+            return state.DoS(100, error("ConnectBlock(): This PoA block reward does not match the value it should"),
+                             REJECT_INVALID, "incorrect-reward");
         }
+
+        if (!CheckPoABlockPaddingAmount(block, pindex)) {
+            return state.DoS(100, error("ConnectBlock(): This PoA block does not have the correct padding"),
+                             REJECT_INVALID, "incorrect-padding");
+        }
+
         if (block.GetBlockTime() >= GetAdjustedTime() + 2 * 60) {
-            return state.DoS(100, error("ConnectBlock(): A PoA block should not be in the future"));
+            return state.DoS(100, error("ConnectBlock(): A PoA block should not be in the future"),
+                             REJECT_INVALID, "time-in-future");
         }
     }
 
@@ -3158,9 +3066,9 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
     bool fScriptChecks = pindex->nHeight >= Checkpoints::GetTotalBlocksEstimate();
 
     // If scripts won't be checked anyways, don't bother seeing if CLTV is activated
-    bool fCLTVHasMajority = false;
+    bool fCLTVIsActivated = false;
     if (fScriptChecks && pindex->pprev) {
-        fCLTVHasMajority = CBlockIndex::IsSuperMajority(5, pindex->pprev, Params().EnforceBlockUpgradeMajority());
+        fCLTVIsActivated = pindex->pprev->nHeight >= Params().BIP65ActivationHeight();
     }
 
     // BIP16 didn't become active until Apr 1 2012
@@ -3226,9 +3134,6 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
                     }
                     pwalletMain->pendingKeyImages.remove(keyImage.GetHex());
                 }
-                if (!ValidOutPoint(in.prevout, pindex->nHeight)) {
-                    return state.DoS(100, error("%s : tried to spend invalid input %s in tx %s", __func__, in.prevout.ToString(), tx.GetHash().GetHex()), REJECT_INVALID, "bad-txns-invalid-inputs");
-                }
             }
 
             if (!tx.IsCoinStake())
@@ -3238,7 +3143,7 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
 
             std::vector<CScriptCheck> vChecks;
 			unsigned int flags = SCRIPT_VERIFY_P2SH | SCRIPT_VERIFY_DERSIG;
-            if (fCLTVHasMajority)
+            if (fCLTVIsActivated)
                 flags |= SCRIPT_VERIFY_CHECKLOCKTIMEVERIFY;
 
             if (!CheckInputs(tx, state, view, fScriptChecks, flags, false, nScriptCheckThreads ? &vChecks : NULL))
@@ -3260,33 +3165,17 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
     if (block.IsProofOfStake()) {
         const CTransaction coinstake = block.vtx[1];
         size_t numUTXO = coinstake.vout.size();
-        CAmount posBlockReward = PoSBlockReward();
         if (mapBlockIndex.count(block.hashPrevBlock) < 1) {
             return state.DoS(100, error("ConnectBlock() : Previous block not found, received block %s, previous %s, current tip %s", block.GetHash().GetHex(), block.hashPrevBlock.GetHex(), chainActive.Tip()->GetBlockHash().GetHex()));
         }
-        int thisBlockHeight = mapBlockIndex[block.hashPrevBlock]->nHeight + 1; //avoid potential block disorder during download
-        CAmount blockValue = GetBlockValue(mapBlockIndex[block.hashPrevBlock]);
-        /*if (blockValue > posBlockReward) {
-            //numUTXO - 1 is PoS rewards commitment not correct", numUTXO - 2 is masternode reward
-            const CTxOut& mnOut = coinstake.vout[numUTXO - 2];
-            std::string mnsa(mnOut.masternodeStealthAddress.begin(), mnOut.masternodeStealthAddress.end());
-            if (!VerifyDerivedAddress(mnOut, mnsa))
-                return state.DoS(100, error("ConnectBlock() : Incorrect derived address for masternode rewards"));
+        CAmount blockValue = GetBlockValue(mapBlockIndex[block.hashPrevBlock]->nHeight);
+        const CTxOut& mnOut = coinstake.vout[numUTXO - 1];
+        std::string mnsa(mnOut.masternodeStealthAddress.begin(), mnOut.masternodeStealthAddress.end());
+        if (!VerifyDerivedAddress(mnOut, mnsa))
+            return state.DoS(100, error("ConnectBlock() : Incorrect derived address for masternode rewards"));
 
-            CAmount teamReward = blockValue - posBlockReward;
-            const CTxOut& foundationOut = coinstake.vout[numUTXO - 1];
-            if (foundationOut.nValue != teamReward)
-                return state.DoS(100, error("ConnectBlock() : Incorrect amount PoS rewards for foundation, reward = %d while the correct reward = %d", foundationOut.nValue, teamReward));
-
-            //if (!VerifyDerivedAddress(foundationOut, FOUNDATION_WALLET))
-                //return state.DoS(100, error("ConnectBlock() : Incorrect derived address PoS rewards for foundation"));
-        } else {*/
-            //there is no team rewards in this block
-            const CTxOut& mnOut = coinstake.vout[numUTXO - 1];
-            std::string mnsa(mnOut.masternodeStealthAddress.begin(), mnOut.masternodeStealthAddress.end());
-            if (!VerifyDerivedAddress(mnOut, mnsa))
-                return state.DoS(100, error("ConnectBlock() : Incorrect derived address for masternode rewards"));
-        //}
+        if (pindex->nHeight <= Params().HardFork() && nValueIn < Params().MinimumStakeAmount())
+            return state.DoS(100, error("ConnectBlock() : Incorrect Minimum Stake Amount"));
     }
 
     // track money supply and mint amount info
@@ -3303,7 +3192,7 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
         nInputs <= 1 ? 0 : 0.001 * (nTime1 - nTimeStart) / (nInputs - 1), nTimeConnect * 0.000001);
 
     //PoW phase redistributed fees to miner. PoS stage destroys fees.
-    CAmount nExpectedMint = GetBlockValue(pindex->pprev);
+    CAmount nExpectedMint = GetBlockValue(pindex->pprev->nHeight);
     nExpectedMint += nFees;
 
     if (!block.IsPoABlockByVersion() && !IsBlockValueValid(block, nExpectedMint, pindex->nMint)) {
@@ -5941,7 +5830,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             vRecv >> LIMITED_STRING(pfrom->strSubVer, MAX_SUBVERSION_LENGTH);
             pfrom->cleanSubVer = SanitizeString(pfrom->strSubVer);
         }
-        if (IsUnsupportedVersion(pfrom->strSubVer)) {
+        if (IsUnsupportedVersion(pfrom->strSubVer, chainActive.Height())) {
                 // disconnect from peers other than these sub versions
                 LogPrintf("peer %s using unsupported version %s; disconnecting and banning\n", pfrom->addr.ToString().c_str(), pfrom->strSubVer.c_str());
                 state->fShouldBan = true;

@@ -56,6 +56,7 @@ UniValue getinfo(const UniValue &params, bool fHelp) {
             "  \"walletversion\": xxxxx,     (numeric) the wallet version\n"
             "  \"balance\": xxxxxxx,         (numeric) the total prcycoin balance of the wallet\n"
             "  \"blocks\": xxxxxx,           (numeric) the current number of blocks processed in the server\n"
+            "  \"synced\": xxxxxx,           (boolean) if the server is synced or not\n"
             "  \"timeoffset\": xxxxx,        (numeric) the time offset\n"
             "  \"connections\": xxxxx,       (numeric) the number of connections\n"
             "  \"proxy\": \"host:port\",     (string, optional) the proxy used by the server\n"
@@ -87,6 +88,7 @@ UniValue getinfo(const UniValue &params, bool fHelp) {
     }
 #endif
     obj.push_back(Pair("blocks", (int) chainActive.Height()));
+    obj.push_back(Pair("synced", masternodeSync.IsBlockchainSynced()));
     obj.push_back(Pair("timeoffset", GetTimeOffset()));
     obj.push_back(Pair("connections", (int) vNodes.size()));
     obj.push_back(Pair("proxy", (proxy.IsValid() ? proxy.proxy.ToStringIPPort() : string())));
@@ -117,7 +119,7 @@ UniValue getinfo(const UniValue &params, bool fHelp) {
             obj.push_back(Pair("staking status", ("inactive (no peer connections)")));
         } else if (!masternodeSync.IsSynced()) {
             obj.push_back(Pair("staking status", ("inactive (syncing masternode list)")));
-        } else if (!pwalletMain->MintableCoins() && pwalletMain->stakingMode == StakingMode::STAKING_WITH_CONSOLIDATION) {
+        } else if (!pwalletMain->MintableCoins() && pwalletMain->combineMode == CombineMode::ON) {
             obj.push_back(Pair("staking status", ("delayed (waiting for 100 blocks)")));
         } else if (!pwalletMain->MintableCoins()) {
             obj.push_back(Pair("staking status", ("inactive (no mintable coins)")));
@@ -126,6 +128,24 @@ UniValue getinfo(const UniValue &params, bool fHelp) {
         }
     }
     obj.push_back(Pair("errors", GetWarnings("statusbar")));
+    return obj;
+}
+
+UniValue getversion(const UniValue &params, bool fHelp) {
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+            "getversion\n"
+            "Returns the server version.\n"
+            "\nResult:\n"
+            "{\n"
+            "  \"version\": xxxxx,           (numeric) the server version\n"
+            "}\n"
+            "\nExamples:\n" +
+            HelpExampleCli("getversion", "") + HelpExampleRpc("getversion", ""));
+    LOCK(cs_main);
+
+    UniValue obj(UniValue::VOBJ);
+    obj.push_back(Pair("version", CLIENT_VERSION));
     return obj;
 }
 
@@ -519,7 +539,7 @@ UniValue getstakingstatus(const UniValue& params, bool fHelp)
             obj.push_back(Pair("staking status", ("inactive (no peer connections)")));
         } else if (!masternodeSync.IsSynced()) {
             obj.push_back(Pair("staking status", ("inactive (syncing masternode list)")));
-        } else if (!pwalletMain->MintableCoins() && pwalletMain->stakingMode == StakingMode::STAKING_WITH_CONSOLIDATION) {
+        } else if (!pwalletMain->MintableCoins() && pwalletMain->combineMode == CombineMode::ON) {
             obj.push_back(Pair("staking status", ("delayed (waiting for 100 blocks)")));
         } else if (!pwalletMain->MintableCoins()) {
             obj.push_back(Pair("staking status", ("inactive (no mintable coins)")));

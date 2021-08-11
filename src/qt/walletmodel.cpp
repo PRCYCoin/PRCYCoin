@@ -14,7 +14,7 @@
 #include "recentrequeststablemodel.h"
 #include "transactionrecord.h"
 #include "transactiontablemodel.h"
-
+#include "init.h" // for ShutdownRequested(). Future: move to an interface wrapper
 
 #include "base58.h"
 #include "wallet/db.h"
@@ -61,6 +61,11 @@ WalletModel::WalletModel(CWallet* wallet, OptionsModel* optionsModel, QObject* p
     pollTimer->start(MODEL_UPDATE_DELAY);
 
     subscribeToCoreSignals();
+}
+
+bool WalletModel::isShutdownRequested()
+{
+    return ShutdownRequested();
 }
 
 WalletModel::~WalletModel()
@@ -719,18 +724,18 @@ StakingStatusError WalletModel::getStakingStatusError(QString& error)
         bool fMintable = pwalletMain->MintableCoins();
         CAmount balance = pwalletMain->GetSpendableBalance();
         if (!fMintable || nReserveBalance > balance) {
-            if (balance < CWallet::MINIMUM_STAKE_AMOUNT) {
+            if (balance < Params().MinimumStakeAmount()) {
                 error = "\nBalance is under the minimum 400,000 staking threshold.\nPlease send more PRCY to this wallet.\n";
                 return StakingStatusError::STAKING_OK;
             }
-            if (nReserveBalance > balance || (balance > nReserveBalance && balance - nReserveBalance < CWallet::MINIMUM_STAKE_AMOUNT)) {
+            if (nReserveBalance > balance || (balance > nReserveBalance && balance - nReserveBalance < Params().MinimumStakeAmount())) {
                 error = "Reserve balance is too high.\nPlease lower it in order to turn staking on.";
                 return StakingStatusError::RESERVE_TOO_HIGH;
             }
             if (!fMintable) {
-                if (balance > CWallet::MINIMUM_STAKE_AMOUNT) {
+                if (balance > Params().MinimumStakeAmount()) {
                     //10 is to cover transaction fees
-                    if (balance >= CWallet::MINIMUM_STAKE_AMOUNT + 10*COIN) {
+                    if (balance >= Params().MinimumStakeAmount() + 10*COIN) {
                         error = "Not enough mintable coins.\nDo you want to merge & make a sent-to-yourself transaction to make the wallet stakable?";
                         return StakingStatusError::UTXO_UNDER_THRESHOLD;
                     }

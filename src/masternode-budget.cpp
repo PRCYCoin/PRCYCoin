@@ -513,7 +513,7 @@ bool CBudgetManager::FillBlockPayee(CMutableTransaction& txNew, CAmount nFees, b
         ++it;
     }
 
-    CAmount blockValue = GetBlockValue(pindexPrev);
+    CAmount blockValue = GetBlockValue(pindexPrev->nHeight);
 
     if (fProofOfStake) {
         if (nHighestCount > 0) {

@@ -19,6 +19,7 @@ public:
     void setTxID(QString strId);
     void setTxAddress(QString strAddr);
     void setTxPrivKey(QString strPrivKey);
+    void setTxAmount(QString amount);
     void setTxFee(CAmount fee);
 
 private Q_SLOTS:
@@ -26,6 +27,7 @@ private Q_SLOTS:
     void copyID();
     void copyAddress();
     void copyPrivateKey();
+    void copyTxAmount();
     void copyTxFee();
 
 private:
