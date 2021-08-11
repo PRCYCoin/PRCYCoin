@@ -87,7 +87,7 @@ jobs:
     - name: Build PRCY 
       run: |
         ./autogen.sh
-        ./configure --disable-jni --disable-tests --disable-gui-tests --disable-bench --prefix=$(realpath depends/x86_64-pc-linux-gnu)
+        ./configure --disable-jni --disable-tests --disable-gui-tests --disable-bench --prefix=$(realpath depends/x86_64-pc-linux-gnu) --enable-upnp-default
         make -j$(nproc)
       working-directory: ${{ env.SOURCE_ARTIFACT }}
     - name: Prepare Files for Artifact
@@ -136,7 +136,7 @@ jobs:
     - name: Build PRCY
       run: |
         ./autogen.sh
-        ./configure --disable-jni --disable-tests --disable-gui-tests --disable-bench --prefix=$(realpath depends/x86_64-w64-mingw32)
+        ./configure --disable-jni --disable-tests --disable-gui-tests --disable-bench --prefix=$(realpath depends/x86_64-w64-mingw32) --enable-upnp-default
         make -j$(nproc)
         make deploy -j$(nproc)
       working-directory: ${{ env.SOURCE_ARTIFACT }}
@@ -184,7 +184,7 @@ jobs:
     - name: Build PRCY
       run: |
         ./autogen.sh
-        ./configure --disable-jni --disable-tests --disable-gui-tests --disable-bench --prefix=$(realpath depends/i686-w64-mingw32)
+        ./configure --disable-jni --disable-tests --disable-gui-tests --disable-bench --prefix=$(realpath depends/i686-w64-mingw32) --enable-upnp-default
         make -j$(nproc)
         make deploy -j$(nproc)
       working-directory: ${{ env.SOURCE_ARTIFACT }}
@@ -236,7 +236,7 @@ jobs:
     - name: Build PRCY
       run: |
         ./autogen.sh
-        ./configure --disable-jni --disable-tests --disable-gui-tests --disable-bench --prefix=$(realpath depends/x86_64-apple-darwin16)
+        ./configure --disable-jni --disable-tests --disable-gui-tests --disable-bench --prefix=$(realpath depends/x86_64-apple-darwin16) --enable-upnp-default
         make -j$(nproc)
         make deploy -j$(nproc)
       working-directory: ${{ env.SOURCE_ARTIFACT }}
@@ -280,7 +280,7 @@ jobs:
     - name: Build PRCY
       run: |
         ./autogen.sh
-        ./configure --disable-jni --disable-tests --disable-gui-tests --disable-bench --prefix=$(realpath depends/aarch64-linux-gnu)
+        ./configure --disable-jni --disable-tests --disable-gui-tests --disable-bench --prefix=$(realpath depends/aarch64-linux-gnu) --enable-upnp-default
         make -j$(nproc)
       working-directory: ${{ env.SOURCE_ARTIFACT }}
     - name: Prepare Files for Artifact
@@ -324,7 +324,7 @@ jobs:
     - name: Build PRCY
       run: |
         ./autogen.sh
-        ./configure --disable-jni --disable-tests --disable-gui-tests --disable-bench --prefix=$(realpath depends/arm-linux-gnueabihf) --enable-glibc-back-compat --enable-reduce-exports LDFLAGS=-static-libstdc++
+        ./configure --disable-jni --disable-tests --disable-gui-tests --disable-bench --prefix=$(realpath depends/arm-linux-gnueabihf) --enable-glibc-back-compat --enable-reduce-exports LDFLAGS=-static-libstdc++ --enable-upnp-default
         make -j$(nproc)
       working-directory: ${{ env.SOURCE_ARTIFACT }}
     - name: Prepare Files for Artifact
@@ -368,7 +368,7 @@ jobs:
     - name: Build PRCY
       run: |
         ./autogen.sh
-        ./configure --disable-jni --disable-tests --disable-gui-tests --disable-bench --prefix=$(realpath depends/riscv64-linux-gnu) --enable-reduce-exports LDFLAGS=-static-libstdc++
+        ./configure --disable-jni --disable-tests --disable-gui-tests --disable-bench --prefix=$(realpath depends/riscv64-linux-gnu) --enable-reduce-exports LDFLAGS=-static-libstdc++ --enable-upnp-default
         make -j$(nproc)
       working-directory: ${{ env.SOURCE_ARTIFACT }}
     - name: Prepare Files for Artifact

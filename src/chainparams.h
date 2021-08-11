@@ -85,6 +85,8 @@ public:
     int64_t Interval() const { return nTargetTimespan / nTargetSpacing; }
     int COINBASE_MATURITY() const { return nMaturity; }
     CAmount MaxMoneyOut() const { return nMaxMoneyOut; }
+    CAmount MNCollateralAmt() const { return nMNCollateralAmt; }
+    CAmount MinimumStakeAmount() const { return nMinimumStakeAmount; }
     /** The masternode count that we will allow the see-saw reward payments to be off by */
     int MasternodeCountDrift() const { return nMasternodeCountDrift; }
     /** Make miner stop after a block is found. In RPC, don't return until nGenProcLimit blocks are generated */
@@ -112,7 +114,9 @@ public:
     int PoANewDiff() const { return nPoANewDiff;}
     int PoAFixTime() const { return nPoAFixTime;}
     int PoAPaddingBlock() const { return nPoAPaddingBlock;}
+    int PoAPadding() const { return nPoAPadding;}
     int BIP65ActivationHeight() const { return nBIP65ActivationHeight; }
+    int HardFork() const { return nHardForkBlock;}
 
     //For PoA block time
     int POA_BLOCK_TIME() const { return nPoABlockTime; }
@@ -140,13 +144,17 @@ protected:
     int64_t nTargetSpacing;
     int nStartPOABlock;
     int nSoftForkBlock;
+    int nHardForkBlock;
     int nPoANewDiff;
     int nPoAFixTime;
     int nPoAPaddingBlock;
+    int nPoAPadding;
     int nMasternodeCountDrift;
     int nMaturity;
     int nModifierUpdateBlock;
     CAmount nMaxMoneyOut;
+    CAmount nMNCollateralAmt;
+    CAmount nMinimumStakeAmount;
     int nMinerThreads;
     std::vector<CDNSSeedData> vSeeds;
     std::vector<unsigned char> base58Prefixes[MAX_BASE58_TYPES];

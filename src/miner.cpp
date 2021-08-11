@@ -110,7 +110,7 @@ uint32_t GetListOfPoSInfo(uint32_t currentHeight, std::vector<PoSBlockSummary>& 
     }
     if (nloopIdx <= Params().START_POA_BLOCK()) {
         //this is the first PoA block ==> take all PoS blocks from LAST_POW_BLOCK up to currentHeight - 60 inclusive
-        for (int i = Params().LAST_POW_BLOCK() + 1; i <= Params().LAST_POW_BLOCK() + 60; i++) {
+        for (int i = Params().LAST_POW_BLOCK() + 1; i <= Params().LAST_POW_BLOCK() + (size_t)Params().MAX_NUM_POS_BLOCKS_AUDITED(); i++) {
             PoSBlockSummary pos;
             pos.hash = chainActive[i]->GetBlockHash();
             CBlockIndex* pindex = mapBlockIndex[pos.hash];
@@ -181,7 +181,7 @@ CBlockTemplate* CreateNewBlock(const CScript& scriptPubKeyIn, const CPubKey& txP
     std::copy(txPriv.begin(), txPriv.end(), std::back_inserter(txNew.vout[0].txPriv));
 
     CBlockIndex* prev = chainActive.Tip();
-    CAmount nValue = GetBlockValue(prev);
+    CAmount nValue = GetBlockValue(prev->nHeight);
     txNew.vout[0].nValue = nValue;
 
     pblock->vtx.push_back(txNew);
@@ -510,20 +510,13 @@ CBlockTemplate* CreateNewPoABlock(const CScript& scriptPubKeyIn, const CPubKey& 
         return NULL;
     }
 
-    if (pblock->posBlocksAudited.size() >= (size_t)Params().MIN_NUM_POS_BLOCKS_AUDITED() && pblock->posBlocksAudited[Params().MIN_NUM_POS_BLOCKS_AUDITED()].height >= (chainActive.Tip()->nHeight - 30)){
-        LogPrintf("%s: PoA Padding Not Reached - No PoA block to mine\n", __func__);
-        return NULL;
-    } else {
-        LogPrintf("%s: PoA Padding Reached - Attemtping to mine PoA block\n", __func__);
-    }
     // Set block version to differentiate PoA blocks from PoS blocks
     pblock->SetVersionPoABlock();
     pblock->nTime = GetAdjustedTime();
 
     //compute PoA block reward
-    CAmount nReward = pblock->posBlocksAudited.size() * 0.5 * COIN;
+    CAmount nReward = pblock->posBlocksAudited.size() * 0.25 * COIN;
     pblock->vtx[0].vout[0].nValue = nReward;
-
     pblock->vtx[0].txType = TX_TYPE_REVEAL_AMOUNT;
 
     CPubKey sharedSec;

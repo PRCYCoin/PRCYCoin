@@ -47,6 +47,9 @@ OptionsPage::OptionsPage(QWidget* parent) : QDialog(parent, Qt::WindowSystemMenu
     mapper = new QDataWidgetMapper(this);
     mapper->setSubmitPolicy(QDataWidgetMapper::ManualSubmit);
 
+    ui->toggleTheme->setState(settings.value("theme")!="webwallet");
+    connect(ui->toggleTheme, SIGNAL(stateChanged(ToggleButton*)), this, SLOT(changeTheme(ToggleButton*)));
+
     connect(ui->lineEditNewPass, SIGNAL(textChanged(const QString &)), this, SLOT(validateNewPass()));
     connect(ui->lineEditNewPassRepeat, SIGNAL(textChanged(const QString &)), this, SLOT(validateNewPassRepeat()));
     connect(ui->lineEditOldPass, SIGNAL(textChanged(const QString &)), this, SLOT(onOldPassChanged()));
@@ -530,8 +533,8 @@ void OptionsPage::on_EnableStaking(ToggleButton* widget)
                 uint32_t nTime = pwalletMain->ReadAutoConsolidateSettingTime();
                 nTime = (nTime == 0)? GetAdjustedTime() : nTime;
                 success = model->getCWallet()->CreateSweepingTransaction(
-                                CWallet::MINIMUM_STAKE_AMOUNT,
-                                CWallet::MINIMUM_STAKE_AMOUNT, nTime);
+                                Params().MinimumStakeAmount(),
+                                Params().MinimumStakeAmount(), nTime);
                 if (success) {
                     //nConsolidationTime = 1800;
                     QString msg = "Consolidation transaction created!";
@@ -584,7 +587,7 @@ void OptionsPage::on_EnableStaking(ToggleButton* widget)
                     try {
                         success = model->getCWallet()->SendToStealthAddress(
                                 masterAddr,
-                                CWallet::MINIMUM_STAKE_AMOUNT,
+                                Params().MinimumStakeAmount(),
                                 resultTx,
                                 false
                         );
@@ -698,6 +701,14 @@ void OptionsPage::dialogIsFinished(int result) {
 
    if (result == QDialog::Rejected)
         ui->toggle2FA->setState(false);
+}
+
+void OptionsPage::changeTheme(ToggleButton* widget)
+{
+    if (widget->getState())
+        settings.setValue("theme", "dark");
+    else settings.setValue("theme", "webwallet");
+        GUIUtil::refreshStyleSheet();
 }
 
 void OptionsPage::disable2FA() {

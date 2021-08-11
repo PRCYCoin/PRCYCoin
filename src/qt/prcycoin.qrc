@@ -76,9 +76,11 @@
         <file alias="telegram">res/icons/telegram.png</file>
         <file alias="twitter">res/icons/twitter.png</file>
         <file alias="onion">res/icons/onion.png</file>
+        <file alias="checkmark">res/icons/checkmark.png</file>
     </qresource>
     <qresource prefix="/css">
         <file alias="dark">res/css/Dark.css</file>
+        <file alias="webwallet">res/css/WebWallet.css</file>
     </qresource>
     <qresource prefix="/images">
         <file alias="about">res/images/about.png</file>

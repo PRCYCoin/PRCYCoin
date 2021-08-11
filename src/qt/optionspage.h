@@ -84,6 +84,7 @@ private Q_SLOTS:
     void on_pushButtonPassword_clicked();
     void on_pushButtonPasswordClear_clicked();
     void on_pushButtonBackup_clicked();
+    void changeTheme(ToggleButton* widget);
     void on_Enable2FA(ToggleButton* widget);
     void on_pushButtonSave_clicked();
     void on_pushButtonDisable_clicked();

@@ -251,8 +251,7 @@ int64_t GetMasternodePayment(int nHeight, int64_t blockValue, int nMasternodeCou
 unsigned int GetNextWorkRequired(const CBlockIndex* pindexLast, const CBlockHeader* pblock, bool fProofOfStake);
 
 bool ActivateBestChain(CValidationState& state, CBlock* pblock = NULL, bool fAlreadyChecked = false);
-CAmount GetBlockValue(const CBlockIndex *ptip);
-CAmount PoSBlockReward();
+CAmount GetBlockValue(int nHeight);
 
 void RemoveInvalidTransactionsFromMempool();
 

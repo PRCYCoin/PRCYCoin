@@ -384,7 +384,8 @@ RES_IMAGES = \
   qt/res/images/syncp.png
 
 RES_CSS = \
-  qt/res/css/Dark.css
+  qt/res/css/Dark.css \
+  qt/res/css/WebWallet.css
 
 RES_MOVIES = $(wildcard $(srcdir)/qt/res/movies/spinner-*.png)
 
