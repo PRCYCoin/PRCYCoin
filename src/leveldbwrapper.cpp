@@ -17,14 +17,10 @@ void HandleError(const leveldb::Status& status)
 {
     if (status.ok())
         return;
-    LogPrintf("%s\n", status.ToString());
-    if (status.IsCorruption())
-        throw leveldb_error("Database corrupted");
-    if (status.IsIOError())
-        throw leveldb_error("Database I/O error");
-    if (status.IsNotFound())
-        throw leveldb_error("Database entry missing");
-    throw leveldb_error("Unknown database error");
+    const std::string errmsg = "Fatal LevelDB error: " + status.ToString();
+    LogPrintf("%s\n", errmsg);
+    LogPrintf("You can use -debug=leveldb to get more complete diagnostic messages\n");
+    throw leveldb_error(errmsg);
 }
 
 static void SetMaxOpenFiles(leveldb::Options *options) {
