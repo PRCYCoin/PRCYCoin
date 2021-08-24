@@ -22,7 +22,7 @@ void HandleError(const leveldb::Status& status)
     const std::string errmsg = "Fatal LevelDB error: " + status.ToString();
     LogPrintf("%s\n", errmsg);
     LogPrintf("You can use -debug=leveldb to get more complete diagnostic messages\n");
-    throw leveldb_error(errmsg);
+    throw dbwrapper_error(errmsg);
 }
 
 static void SetMaxOpenFiles(leveldb::Options *options) {
@@ -66,7 +66,7 @@ static leveldb::Options GetOptions(size_t nCacheSize)
     return options;
 }
 
-CLevelDBWrapper::CLevelDBWrapper(const boost::filesystem::path& path, size_t nCacheSize, bool fMemory, bool fWipe)
+CDBWrapper::CDBWrapper(const boost::filesystem::path& path, size_t nCacheSize, bool fMemory, bool fWipe)
 {
     penv = NULL;
     readoptions.verify_checksums = true;
@@ -91,7 +91,7 @@ CLevelDBWrapper::CLevelDBWrapper(const boost::filesystem::path& path, size_t nCa
     LogPrintf("Opened LevelDB successfully\n");
 }
 
-CLevelDBWrapper::~CLevelDBWrapper()
+CDBWrapper::~CDBWrapper()
 {
     delete pdb;
     pdb = NULL;
@@ -103,21 +103,21 @@ CLevelDBWrapper::~CLevelDBWrapper()
     options.env = NULL;
 }
 
-bool CLevelDBWrapper::WriteBatch(CLevelDBBatch& batch, bool fSync)
+bool CDBWrapper::WriteBatch(CDBBatch& batch, bool fSync)
 {
     leveldb::Status status = pdb->Write(fSync ? syncoptions : writeoptions, &batch.batch);
     HandleError(status);
     return true;
 }
 
-bool CLevelDBWrapper::IsEmpty()
+bool CDBWrapper::IsEmpty()
 {
-    boost::scoped_ptr<CLevelDBIterator> it(NewIterator());
+    boost::scoped_ptr<CDBIterator> it(NewIterator());
     it->SeekToFirst();
     return !(it->Valid());
 }
 
-CLevelDBIterator::~CLevelDBIterator() { delete piter; }
-bool CLevelDBIterator::Valid() { return piter->Valid(); }
-void CLevelDBIterator::SeekToFirst() { piter->SeekToFirst(); }
-void CLevelDBIterator::Next() { piter->Next(); }
+CDBIterator::~CDBIterator() { delete piter; }
+bool CDBIterator::Valid() { return piter->Valid(); }
+void CDBIterator::SeekToFirst() { piter->SeekToFirst(); }
+void CDBIterator::Next() { piter->Next(); }
