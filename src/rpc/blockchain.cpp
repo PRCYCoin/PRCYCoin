@@ -1265,3 +1265,138 @@ UniValue setmaxreorgdepth(const UniValue& params, bool fHelp)
 
     return NullUniValue;
 }
+
+UniValue getlastpoablock(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+            "getlastpoablock\n"
+            "\nReturns all details of the last PoA block\n"
+            "\nResult:\n"
+            "\"hash\"         (string) The last PoA block hash\n"
+            "\nExamples:\n" +
+            HelpExampleCli("getlastpoablockhash", "") + HelpExampleRpc("getlastpoablockhash", ""));
+
+    LOCK(cs_main);
+
+    //Find the previous PoA block
+    CBlock block;
+    CBlockIndex* pindex = chainActive.Tip();
+    while (pindex->nHeight > Params().START_POA_BLOCK()) {
+        if (pindex->GetBlockHeader().IsPoABlockByVersion()) {
+            break;
+        }
+        pindex = pindex->pprev;
+    }
+    ReadBlockFromDisk(block, pindex);
+
+    return blockToJSON(block, pindex);
+}
+
+UniValue getlastpoablockhash(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+            "getlastpoablockhash\n"
+            "\nReturns hash of the last PoA block.\n"
+            "\nResult:\n"
+            "\"hash\"         (string) The last PoA block hash\n"
+            "\nExamples:\n" +
+            HelpExampleCli("getlastpoablockhash", "") + HelpExampleRpc("getlastpoablockhash", ""));
+
+    LOCK(cs_main);
+
+    //Find the previous PoA block
+    CBlockIndex* pindex = chainActive.Tip();
+    while (pindex->nHeight > Params().START_POA_BLOCK()) {
+        if (pindex->GetBlockHeader().IsPoABlockByVersion()) {
+            break;
+        }
+        pindex = pindex->pprev;
+    }
+
+    return pindex->GetBlockHash().GetHex();
+}
+
+UniValue getlastpoablockheight(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+            "getlastpoablockheight\n"
+            "\nReturns block height of the last PoA block.\n"
+            "\nResult:\n"
+            "\"height\"         (numeric) The last PoA block height\n"
+            "\nExamples:\n" +
+            HelpExampleCli("getlastpoablockheight", "") + HelpExampleRpc("getlastpoablockheight", ""));
+
+    LOCK(cs_main);
+
+    //Find the previous PoA block
+    CBlockIndex* pindex = chainActive.Tip();
+    while (pindex->nHeight > Params().START_POA_BLOCK()) {
+        if (pindex->GetBlockHeader().IsPoABlockByVersion()) {
+            break;
+        }
+        pindex = pindex->pprev;
+    }
+
+    return pindex->nHeight;
+}
+
+UniValue getlastpoablocktime(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+            "getlastpoablocktime\n"
+            "\nReturns the time in seconds since epoch (Jan 1 1970 GMT) of the last PoA block.\n"
+            "\nResult:\n"
+            "\"time\"         (numeric) The last PoA block time in seconds since epoch (Jan 1 1970 GMT)\n"
+            "\nExamples:\n" +
+            HelpExampleCli("getlastpoablocktime", "") + HelpExampleRpc("getlastpoablocktime", ""));
+
+    LOCK(cs_main);
+
+    //Find the previous PoA block
+    CBlockIndex* pindex = chainActive.Tip();
+    while (pindex->nHeight > Params().START_POA_BLOCK()) {
+        if (pindex->GetBlockHeader().IsPoABlockByVersion()) {
+            break;
+        }
+        pindex = pindex->pprev;
+    }
+
+    int nTime = pindex->nTime;
+
+    return nTime;
+}
+
+UniValue getlastpoaauditedpos(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+            "getlastpoaauditedpos\n"
+            "\nReturns the last audited PoS block in the last PoA block.\n"
+            "\nResult:\n"
+            "\"height\"         (numeric) The last audited PoS block in the last PoA block\n"
+            "\nExamples:\n" +
+            HelpExampleCli("getlastpoaauditedpos", "") + HelpExampleRpc("getlastpoaauditedpos", ""));
+
+    LOCK(cs_main);
+
+    int lastPoSHeight = 0;
+    //Find the previous PoA block
+    CBlock block;
+    CBlockIndex* pindex = chainActive.Tip();
+    while (pindex->nHeight > Params().START_POA_BLOCK()) {
+        if (pindex->GetBlockHeader().IsPoABlockByVersion()) {
+            break;
+        }
+        pindex = pindex->pprev;
+    }
+    ReadBlockFromDisk(block, pindex);
+    for (size_t i = 0; i < block.posBlocksAudited.size(); i++) {
+        lastPoSHeight = block.posBlocksAudited[i].height;
+    }
+
+    return lastPoSHeight;
+}
