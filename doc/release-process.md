@@ -116,7 +116,7 @@ The gbuild invocations below <b>DO NOT DO THIS</b> by default.
     mv build/out/prcycoin-*.tar.gz build/out/prcycoin-*.dmg ../
 
     ./bin/gbuild --memory 3000 --commit prcycoin=v${VERSION} ../prcycoin/contrib/gitian-descriptors/gitian-aarch64.yml
-    ./bin/gsign --signer $SIGNER --release ${VERSION}-linux --destination ../gitian.sigs/ ../prcycoin/contrib/gitian-descriptors/gitian-aarch64.yml
+    ./bin/gsign --signer $SIGNER --release ${VERSION}-aarch64 --destination ../gitian.sigs/ ../prcycoin/contrib/gitian-descriptors/gitian-aarch64.yml
     mv build/out/prcycoin-*.tar.gz build/out/src/prcycoin-*.tar.gz ../
     popd
 
