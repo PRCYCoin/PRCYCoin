@@ -12,7 +12,7 @@
 #include "script/interpreter.h"
 #include "timedata.h"
 #include "util.h"
-
+#include "stakeinput.h"
 
 bool fTestNet = false; //Params().NetworkID() == CBaseChainParams::TESTNET;
 

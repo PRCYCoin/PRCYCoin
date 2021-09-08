@@ -17,6 +17,7 @@
 #include "primitives/transaction.h"
 #include "script/script.h"
 #include "script/sign.h"
+#include "stakeinput.h"
 #include "swifttx.h"
 #include "timedata.h"
 #include "util.h"

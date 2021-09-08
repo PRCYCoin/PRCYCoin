@@ -140,6 +140,15 @@ CTransaction& CTransaction::operator=(const CTransaction &tx) {
     return *this;
 }
 
+bool CTransaction::IsCoinStake() const
+{
+    // ppcoin: the coin stake transaction is marked with the first output empty
+    if (vin[0].prevout.IsNull())
+        return false;
+
+    return (vin.size() > 0 && (!vin[0].prevout.IsNull() && vin[0].decoys.empty()) && vout.size() >= 2 && vout[0].IsEmpty());
+}
+
 CAmount CTransaction::GetValueOut() const
 {
     CAmount nValueOut = 0;

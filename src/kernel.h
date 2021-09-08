@@ -7,6 +7,7 @@
 #define BITCOIN_KERNEL_H
 
 #include "main.h"
+#include "stakeinput.h"
 
 
 // MODIFIER_INTERVAL: time to elapse before new modifier is computed
@@ -20,6 +21,7 @@ extern unsigned int getIntervalVersion(bool fTestNet);
 static const int MODIFIER_INTERVAL_RATIO = 3;
 
 // Compute the hash modifier for proof-of-stake
+bool GetKernelStakeModifier(uint256 hashBlockFrom, uint64_t& nStakeModifier, int& nStakeModifierHeight, int64_t& nStakeModifierTime, bool fPrintProofOfStake);
 bool ComputeNextStakeModifier(const CBlockIndex* pindexPrev, uint64_t& nStakeModifier, bool& fGeneratedStakeModifier);
 
 // Check whether stake kernel meets hash target
