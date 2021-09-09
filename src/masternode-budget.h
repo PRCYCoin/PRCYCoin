@@ -16,7 +16,6 @@
 #include "sync.h"
 #include "util.h"
 
-using namespace std;
 
 extern RecursiveMutex cs_budget;
 
@@ -147,7 +146,7 @@ public:
 class CBudgetDB
 {
 private:
-    boost::filesystem::path pathDB;
+    fs::path pathDB;
     std::string strMagicMessage;
 
 public:
@@ -174,16 +173,16 @@ class CBudgetManager
 {
 private:
     //hold txes until they mature enough to use
-    // XX42    map<uint256, CTransaction> mapCollateral;
-    map<uint256, uint256> mapCollateralTxids;
+    // XX42    std::map<uint256, CTransaction> mapCollateral;
+    std::map<uint256, uint256> mapCollateralTxids;
 
 public:
     // critical section to protect the inner data structures
     mutable RecursiveMutex cs;
 
     // keep track of the scanning errors I've seen
-    map<uint256, CBudgetProposal> mapProposals;
-    map<uint256, CFinalizedBudget> mapFinalizedBudgets;
+    std::map<uint256, CBudgetProposal> mapProposals;
+    std::map<uint256, CFinalizedBudget> mapFinalizedBudgets;
 
     std::map<uint256, CBudgetProposalBroadcast> mapSeenMasternodeBudgetProposals;
     std::map<uint256, CBudgetVote> mapSeenMasternodeBudgetVotes;
@@ -316,7 +315,7 @@ public:
     std::string strBudgetName;
     int nBlockStart;
     std::vector<CTxBudgetPayment> vecBudgetPayments;
-    map<uint256, CFinalizedBudgetVote> mapVotes;
+    std::map<uint256, CFinalizedBudgetVote> mapVotes;
     uint256 nFeeTXHash;
     int64_t nTime;
 
@@ -366,7 +365,7 @@ public:
     void SubmitVote();
 
     //checks the hashes to make sure we know about them
-    string GetStatus();
+    std::string GetStatus();
 
     uint256 GetHash()
     {
@@ -472,7 +471,7 @@ public:
     int64_t nTime;
     uint256 nFeeTXHash;
 
-    map<uint256, CBudgetVote> mapVotes;
+    std::map<uint256, CBudgetVote> mapVotes;
     //cache object
 
     CBudgetProposal();

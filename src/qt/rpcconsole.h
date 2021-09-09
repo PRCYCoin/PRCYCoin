@@ -119,6 +119,8 @@ public Q_SLOTS:
     void unbanSelectedNode();
     /** Show DataDir folder in default browser */
     void showDataDir();
+    /** Show Qt Dir folder in default browser */
+    void showQtDir();
     /** Show folder with wallet backups in default browser */
     void showBackups();
 

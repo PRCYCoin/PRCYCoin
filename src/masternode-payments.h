@@ -11,7 +11,6 @@
 #include "main.h"
 #include "masternode.h"
 
-using namespace std;
 
 extern RecursiveMutex cs_vecPayments;
 extern RecursiveMutex cs_mapMasternodeBlocks;
@@ -39,7 +38,7 @@ void DumpMasternodePayments();
 class CMasternodePaymentDB
 {
 private:
-    boost::filesystem::path pathDB;
+    fs::path pathDB;
     std::string strMagicMessage;
 
 public:

@@ -122,7 +122,7 @@ void HistoryPage::on_cellClicked(int row, int column)
                 CWalletTx tx = pwalletMain->mapWallet[hash];
                 for (size_t i = 0; i < tx.vout.size(); i++) {
                     txnouttype type;
-                    vector<CTxDestination> addresses;
+                    std::vector<CTxDestination> addresses;
                     int nRequired;
 
                     if (ExtractDestinations(tx.vout[i].scriptPubKey, type, addresses, nRequired)) {
@@ -199,11 +199,11 @@ void HistoryPage::updateTableData(CWallet* wallet)
             ui->tableView->removeRow(0);
         }
         ui->tableView->setRowCount(0);
-        vector<std::map<QString, QString> > txs;
+        std::vector<std::map<QString, QString> > txs;
         if (wallet->IsLocked()) {
             {
                 LOCK(pwalletMain->cs_wallet);
-                vector<std::map<QString, QString>> txs;// = WalletUtil::getTXs(pwalletMain);
+                std::vector<std::map<QString, QString>> txs;// = WalletUtil::getTXs(pwalletMain);
 
                 std::map<uint256, CWalletTx> txMap = pwalletMain->mapWallet;
                 std::vector<CWalletTx> latestTxes;

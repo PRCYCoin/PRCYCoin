@@ -15,7 +15,8 @@ typedef int64_t CAmount;
 
 static const CAmount COIN = 100000000;
 static const CAmount CENT = 1000000;
-static const CAmount DUST = COIN / 1000;
+static const CAmount DUST = COIN / 100000;
+static const CAmount MIN_FEE = COIN / 10000;
 static const CAmount MAX_FEE = COIN / 100;
 
 /** Type-safe wrapper class to for fee rates

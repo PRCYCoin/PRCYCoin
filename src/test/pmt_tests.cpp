@@ -13,7 +13,6 @@
 
 #include <boost/test/unit_test.hpp>
 
-using namespace std;
 
 class CPartialMerkleTreeTester : public CPartialMerkleTree
 {

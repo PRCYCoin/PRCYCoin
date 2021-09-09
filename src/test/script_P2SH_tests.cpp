@@ -18,7 +18,6 @@
 #include <boost/test/unit_test.hpp>
 
 #ifdef DISABLE_FAILED_TEST
-using namespace std;
 
 // Helpers:
 static std::vector<unsigned char>

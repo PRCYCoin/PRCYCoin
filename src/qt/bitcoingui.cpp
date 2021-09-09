@@ -225,6 +225,7 @@ BitcoinGUI::BitcoinGUI(const NetworkStyle* networkStyle, QWidget* parent) : QMai
     connect(openConfEditorAction, SIGNAL(triggered()), rpcConsole, SLOT(showConfEditor()));
     connect(openMNConfEditorAction, SIGNAL(triggered()), rpcConsole, SLOT(showMNConfEditor()));
     connect(showDataDirAction, SIGNAL(triggered()), rpcConsole, SLOT(showDataDir()));
+    connect(showQtDirAction, SIGNAL(triggered()), rpcConsole, SLOT(showQtDir()));
     connect(showBackupsAction, SIGNAL(triggered()), rpcConsole, SLOT(showBackups()));
     connect(labelConnectionsIcon, SIGNAL(clicked()), rpcConsole, SLOT(showPeers()));
     connect(labelEncryptionIcon, SIGNAL(clicked()), walletFrame, SLOT(toggleLockWallet()));
@@ -429,6 +430,9 @@ void BitcoinGUI::createActions(const NetworkStyle* networkStyle)
     showDataDirAction = new QAction(QIcon(":/icons/browse"), tr("Show &PRCYcoin Folder"), this);
     showDataDirAction->setStatusTip(tr("Show the PRCYcoin folder"));
     showDataDirAction->setShortcut(Qt::Key_F2);
+    showQtDirAction = new QAction(QIcon(":/icons/browse"), tr("Show &Qt Folder"), this);
+    showQtDirAction->setStatusTip(tr("Show the Qt folder"));
+    showQtDirAction->setShortcut(Qt::Key_F3);
     showBackupsAction = new QAction(QIcon(":/icons/browse"), tr("Show Automatic &Backups"), this);
     showBackupsAction->setStatusTip(tr("Show automatically created wallet backups"));
 
@@ -478,6 +482,8 @@ void BitcoinGUI::createActions(const NetworkStyle* networkStyle)
     openBridgeAction->setStatusTip(tr("Bridge Link"));
     openDexAction = new QAction(QApplication::style()->standardIcon(QStyle::SP_MessageBoxInformation), tr("&PRivaCY DEX"), this);
     openDexAction->setStatusTip(tr("PRivaCY Dex Link"));
+    openCheckerAction = new QAction(QApplication::style()->standardIcon(QStyle::SP_MessageBoxInformation), tr("&PRCY Checker"), this);
+    openCheckerAction->setStatusTip(tr("PRCY Checker Link"));
     openTGTechSupportAction = new QAction(QIcon(":/icons/telegram"), tr("&Telegram Tech Support"), this);
     openTGTechSupportAction->setStatusTip(tr("Telegram Tech Support"));
     openTGMNSupportAction = new QAction(QIcon(":/icons/telegram"), tr("&Telegram Masternode Support"), this);
@@ -499,6 +505,7 @@ void BitcoinGUI::createActions(const NetworkStyle* networkStyle)
     connect(openBootStrapAction, SIGNAL(triggered()), this, SLOT(openBootStrapClicked()));
     connect(openBridgeAction, SIGNAL(triggered()), this, SLOT(openBridgeClicked()));
     connect(openDexAction, SIGNAL(triggered()), this, SLOT(openDexClicked()));
+    connect(openCheckerAction, SIGNAL(triggered()), this, SLOT(openCheckerClicked()));
     connect(openTGTechSupportAction, SIGNAL(triggered()), this, SLOT(openTGTechSupportClicked()));
     connect(openTGMNSupportAction, SIGNAL(triggered()), this, SLOT(openTGMNSupportClicked()));
     connect(openDiscordSupportAction, SIGNAL(triggered()), this, SLOT(openDiscordSupportClicked()));
@@ -575,6 +582,7 @@ void BitcoinGUI::createMenuBar()
         tools->addAction(openConfEditorAction);
         tools->addAction(openMNConfEditorAction);
         tools->addAction(showDataDirAction);
+        tools->addAction(showQtDirAction);
         tools->addAction(showBackupsAction);
         tools->addAction(openBlockExplorerAction);
     }
@@ -600,6 +608,7 @@ void BitcoinGUI::createMenuBar()
     help->addAction(openBootStrapAction);
     help->addAction(openBridgeAction);
     help->addAction(openDexAction);
+    help->addAction(openCheckerAction);
     help->addSeparator();
     help->addAction(openTGTechSupportAction);
     //help->addAction(openTGMNSupportAction);
@@ -826,6 +835,7 @@ void BitcoinGUI::createTrayIconMenu()
     trayIconMenu->addAction(openConfEditorAction);
     trayIconMenu->addAction(openMNConfEditorAction);
     trayIconMenu->addAction(showDataDirAction);
+    trayIconMenu->addAction(showQtDirAction);
     trayIconMenu->addAction(showBackupsAction);
     trayIconMenu->addAction(openBlockExplorerAction);
 #ifndef Q_OS_MAC // This is built-in on Mac
@@ -950,6 +960,11 @@ void BitcoinGUI::openBridgeClicked()
 void BitcoinGUI::openDexClicked()
 {
     QDesktopServices::openUrl(QUrl("https://privacydex.io"));
+}
+
+void BitcoinGUI::openCheckerClicked()
+{
+    QDesktopServices::openUrl(QUrl("https://prcycoin.com/prcy-checker"));
 }
 
 void BitcoinGUI::checkForUpdatesClicked()

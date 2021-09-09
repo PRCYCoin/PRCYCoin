@@ -15,7 +15,6 @@
 #ifdef DISABLE_FAILED_TEST
 #include <univalue.h>
 
-using namespace std;
 
 UniValue
 createArgs(int nRequired, const char *address1 = NULL, const char *address2 = NULL) {
