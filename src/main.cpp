@@ -4356,6 +4356,8 @@ bool ContextualCheckBlockHeader(const CBlockHeader& block, CValidationState& sta
         return state.Invalid(error("%s : block's timestamp is too early", __func__),
             REJECT_INVALID, "time-too-old");
     }
+    if (block.nVersion < 5 || !block.IsPoABlockByVersion())
+        return state.DoS(100, error("ContextualCheckBlockHeader() : block version must be max version 5 or version 100 for PoA"), REJECT_INVALID, "block-version");
 
     // Check that the block chain matches the known block chain up to a checkpoint
     if (!Checkpoints::CheckBlock(nHeight, hash))
