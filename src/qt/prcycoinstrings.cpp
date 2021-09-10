@@ -33,7 +33,7 @@ QT_TRANSLATE_NOOP("prcycoin-core", ""
 "Cannot obtain a lock on data directory %s. PRCY is probably already running."),
 QT_TRANSLATE_NOOP("prcycoin-core", ""
 "Change automatic finalized budget voting behavior. mode=auto: Vote for only "
-"exact finalized budget match to my generated budget. (string, default: auto)"),
+"exact finalized budget match to my generated budget. (std::string, default: auto)"),
 QT_TRANSLATE_NOOP("prcycoin-core", ""
 "Connect only to the specified node(s); -noconnect or -connect=0 alone to "
 "disable automatic connections"),

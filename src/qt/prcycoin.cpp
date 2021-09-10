@@ -31,6 +31,7 @@
 #include "masternodeconfig.h"
 
 #include "init.h"
+#include "fs.h"
 #include "main.h"
 #include "rpc/server.h"
 #include "guiinterface.h"
@@ -51,7 +52,6 @@
 #include <execinfo.h>
 #endif
 
-#include <boost/filesystem/operations.hpp>
 #include <boost/thread.hpp>
 
 #include <QApplication>
@@ -383,7 +383,6 @@ void BitcoinApplication::createWindow(const NetworkStyle* networkStyle)
 
     pollShutdownTimer = new QTimer(window);
     connect(pollShutdownTimer, SIGNAL(timeout()), window, SLOT(detectShutdown()));
-    pollShutdownTimer->start(200);
 }
 
 void BitcoinApplication::createSplashScreen(const NetworkStyle* networkStyle)
@@ -533,6 +532,7 @@ void BitcoinApplication::initializeResult(int retval)
             }
         }
 #endif
+        pollShutdownTimer->start(200);
     } else {
         quit(); // Exit main loop
     }
@@ -642,7 +642,7 @@ int main(int argc, char* argv[])
 
     /// 6. Determine availability of data directory and parse prcycoin.conf
     /// - Do not call GetDataDir(true) before this step finishes
-    if (!boost::filesystem::is_directory(GetDataDir(false))) {
+    if (!fs::is_directory(GetDataDir(false))) {
         QMessageBox::critical(0, QObject::tr("PRCY"),
             QObject::tr("Error: Specified data directory \"%1\" does not exist.").arg(QString::fromStdString(mapArgs["-datadir"])));
         return 1;
@@ -680,7 +680,7 @@ int main(int argc, char* argv[])
 
 #ifdef ENABLE_WALLET
     /// 7a. parse masternode.conf
-    string strErr;
+    std::string strErr;
     if (!masternodeConfig.read(strErr)) {
         QMessageBox::critical(0, QObject::tr("PRCY"),
             QObject::tr("Error reading masternode configuration file: %1").arg(strErr.c_str()));

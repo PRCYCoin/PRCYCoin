@@ -182,7 +182,7 @@ bool CActiveMasternode::SendMasternodePing(std::string& errorMessage)
         }
 
         pmn->lastPing = mnp;
-        mnodeman.mapSeenMasternodePing.insert(make_pair(mnp.GetHash(), mnp));
+        mnodeman.mapSeenMasternodePing.insert(std::make_pair(mnp.GetHash(), mnp));
 
         //mnodeman.mapSeenMasternodeBroadcast.lastPing is probably outdated, so we'll update it
         CMasternodeBroadcast mnb(*pmn);
@@ -454,7 +454,7 @@ bool CActiveMasternode::GetVinFromOutput(COutput out, CTxIn& vin, CPubKey& pubke
         return false;
     }
 
-    if (amount != 5000 * COIN) {
+    if (amount != Params().MNCollateralAmt()) {
         LogPrintf("dsee - masternode collateralization not equal to 5K %s\n", vin.prevout.hash.ToString());
         return false;
     }
@@ -463,7 +463,7 @@ bool CActiveMasternode::GetVinFromOutput(COutput out, CTxIn& vin, CPubKey& pubke
 }
 
 // get all possible outputs for running Masternode
-vector<COutput> CActiveMasternode::SelectCoinsMasternode()
+std::vector<COutput> CActiveMasternode::SelectCoinsMasternode()
 {
     std::vector<COutput> vCoins;
     std::vector<COutput> filteredCoins;
@@ -500,7 +500,7 @@ vector<COutput> CActiveMasternode::SelectCoinsMasternode()
 
         // Filter
         for (const COutput& out : vCoins) {
-            if (pwalletMain->getCTxOutValue(*out.tx, out.tx->vout[out.i]) == 5000 * COIN) { //exactly
+            if (pwalletMain->getCTxOutValue(*out.tx, out.tx->vout[out.i]) == Params().MNCollateralAmt()) { //exactly
                 filteredCoins.push_back(out);
             }
         }

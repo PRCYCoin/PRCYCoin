@@ -14,7 +14,7 @@
 #include "recentrequeststablemodel.h"
 #include "transactionrecord.h"
 #include "transactiontablemodel.h"
-
+#include "init.h" // for ShutdownRequested(). Future: move to an interface wrapper
 
 #include "base58.h"
 #include "wallet/db.h"
@@ -36,7 +36,6 @@
 #include <stdint.h>
 #include <QTextStream>
 
-using namespace std;
 
 WalletModel::WalletModel(CWallet* wallet, OptionsModel* optionsModel, QObject* parent) : QObject(parent), wallet(wallet), optionsModel(optionsModel), addressTableModel(0),
                                                                                          transactionTableModel(0),
@@ -61,6 +60,11 @@ WalletModel::WalletModel(CWallet* wallet, OptionsModel* optionsModel, QObject* p
     pollTimer->start(MODEL_UPDATE_DELAY);
 
     subscribeToCoreSignals();
+}
+
+bool WalletModel::isShutdownRequested()
+{
+    return ShutdownRequested();
 }
 
 WalletModel::~WalletModel()
@@ -260,7 +264,7 @@ void WalletModel::updateWatchOnlyFlag(bool fHaveWatchonly)
 bool WalletModel::validateAddress(const QString& address)
 {
     CBitcoinAddress addressParsed(address.toStdString());
-    bool valid = (regex_match(address.toStdString(), regex("[a-zA-z0-9]+")))&&(address.length()==99||address.length()==110);
+    bool valid = (regex_match(address.toStdString(), std::regex("[a-zA-z0-9]+")))&&(address.length()==99||address.length()==110);
     return valid||addressParsed.IsValid();
 }
 
@@ -489,7 +493,7 @@ static std::vector<std::pair<uint256, ChangeType> > vQueueNotifications;
 static void NotifyTransactionChanged(WalletModel* walletmodel, CWallet* wallet, const uint256& hash, ChangeType status)
 {
     if (fQueueNotifications) {
-        vQueueNotifications.push_back(make_pair(hash, status));
+        vQueueNotifications.push_back(std::make_pair(hash, status));
         return;
     }
 
@@ -514,10 +518,10 @@ static void NotifyWatchonlyChanged(WalletModel* walletmodel, bool fHaveWatchonly
         Q_ARG(bool, fHaveWatchonly));
 }
 
-static void NotifyWalletBacked(WalletModel* model, const bool& fSuccess, const string& filename)
+static void NotifyWalletBacked(WalletModel* model, const bool& fSuccess, const std::string& filename)
 {
     std::string message;
-    string title = "Backup ";
+    std::string title = "Backup ";
     CClientUIInterface::MessageBoxFlags method;
 
     if (fSuccess) {
@@ -719,18 +723,18 @@ StakingStatusError WalletModel::getStakingStatusError(QString& error)
         bool fMintable = pwalletMain->MintableCoins();
         CAmount balance = pwalletMain->GetSpendableBalance();
         if (!fMintable || nReserveBalance > balance) {
-            if (balance < CWallet::MINIMUM_STAKE_AMOUNT) {
+            if (balance < Params().MinimumStakeAmount()) {
                 error = "\nBalance is under the minimum 400,000 staking threshold.\nPlease send more PRCY to this wallet.\n";
                 return StakingStatusError::STAKING_OK;
             }
-            if (nReserveBalance > balance || (balance > nReserveBalance && balance - nReserveBalance < CWallet::MINIMUM_STAKE_AMOUNT)) {
+            if (nReserveBalance > balance || (balance > nReserveBalance && balance - nReserveBalance < Params().MinimumStakeAmount())) {
                 error = "Reserve balance is too high.\nPlease lower it in order to turn staking on.";
                 return StakingStatusError::RESERVE_TOO_HIGH;
             }
             if (!fMintable) {
-                if (balance > CWallet::MINIMUM_STAKE_AMOUNT) {
+                if (balance > Params().MinimumStakeAmount()) {
                     //10 is to cover transaction fees
-                    if (balance >= CWallet::MINIMUM_STAKE_AMOUNT + 10*COIN) {
+                    if (balance >= Params().MinimumStakeAmount() + 10*COIN) {
                         error = "Not enough mintable coins.\nDo you want to merge & make a sent-to-yourself transaction to make the wallet stakable?";
                         return StakingStatusError::UTXO_UNDER_THRESHOLD;
                     }
@@ -766,9 +770,9 @@ std::map<QString, QString> getTx(CWallet* wallet, uint256 hash)
     return getTx(wallet, *wallet->GetWalletTx(hash));
 }
 
-vector<std::map<QString, QString> > getTXs(CWallet* wallet)
+std::vector<std::map<QString, QString> > getTXs(CWallet* wallet)
 {
-    vector<std::map<QString, QString> > txs;
+    std::vector<std::map<QString, QString> > txs;
     if (!wallet || wallet->IsLocked()) return txs;
     std::map<uint256, CWalletTx> txMap = wallet->mapWallet;
     {
@@ -792,7 +796,7 @@ std::map<QString, QString> getTx(CWallet* wallet, CWalletTx tx)
     if (wallet && !wallet->IsLocked()) {
         for (CTxIn in: tx.vin) {
             COutPoint prevout = wallet->findMyOutPoint(in);
-            map<uint256, CWalletTx>::const_iterator mi = wallet->mapWallet.find(prevout.hash);
+            std::map<uint256, CWalletTx>::const_iterator mi = wallet->mapWallet.find(prevout.hash);
             if (mi != wallet->mapWallet.end()) {
                 const CWalletTx& prev = (*mi).second;
                 if (prevout.n < prev.vout.size()) {

@@ -11,6 +11,7 @@
 #include "bloom.h"
 #include "compat.h"
 #include "hash.h"
+#include "fs.h"
 #include "limitedmap.h"
 #include "mruset.h"
 #include "netbase.h"
@@ -28,7 +29,6 @@
 #include <arpa/inet.h>
 #endif
 
-#include <boost/filesystem/path.hpp>
 #include <boost/signals2/signal.hpp>
 
 class CAddrMan;
@@ -750,7 +750,7 @@ void RelayInv(CInv& inv);
 class CAddrDB
 {
 private:
-    boost::filesystem::path pathAddr;
+    fs::path pathAddr;
 
 public:
     CAddrDB();
@@ -763,13 +763,13 @@ public:
 class CBanDB
 {
 private:
-    boost::filesystem::path pathBanlist;
+    fs::path pathBanlist;
 public:
     CBanDB();
     bool Write(const banmap_t& banSet);
     bool Read(banmap_t& banSet);
 };
 void DumpBanlist();
-bool IsUnsupportedVersion(std::string strSubVer);
+bool IsUnsupportedVersion(std::string strSubVer, int nHeight);
 
 #endif // BITCOIN_NET_H

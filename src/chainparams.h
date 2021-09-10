@@ -3,6 +3,7 @@
 // Copyright (c) 2014-2015 The Dash developers
 // Copyright (c) 2015-2018 The PIVX developers
 // Copyright (c) 2018-2020 The DAPS Project developers
+// Copyright (c) 2020-2021 The PRCY developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -25,6 +26,11 @@ public:
     bool supportsServiceBitsFiltering;
     std::string getHost(uint64_t requiredServiceBits) const;
     CDNSSeedData(const std::string& strName, const std::string& strHost, bool supportsServiceBitsFilteringIn = false) : name(strName), host(strHost), supportsServiceBitsFiltering(supportsServiceBitsFilteringIn) {}
+};
+
+struct SeedSpec6 {
+    uint8_t addr[16];
+    uint16_t port;
 };
 
 /**
@@ -79,6 +85,8 @@ public:
     int64_t Interval() const { return nTargetTimespan / nTargetSpacing; }
     int COINBASE_MATURITY() const { return nMaturity; }
     CAmount MaxMoneyOut() const { return nMaxMoneyOut; }
+    CAmount MNCollateralAmt() const { return nMNCollateralAmt; }
+    CAmount MinimumStakeAmount() const { return nMinimumStakeAmount; }
     /** The masternode count that we will allow the see-saw reward payments to be off by */
     int MasternodeCountDrift() const { return nMasternodeCountDrift; }
     /** Make miner stop after a block is found. In RPC, don't return until nGenProcLimit blocks are generated */
@@ -89,7 +97,7 @@ public:
     std::string NetworkIDString() const { return strNetworkID; }
     const std::vector<CDNSSeedData>& DNSSeeds() const { return vSeeds; }
     const std::vector<unsigned char>& Base58Prefix(Base58Type type) const { return base58Prefixes[type]; }
-    const std::vector<CAddress>& FixedSeeds() const { return vFixedSeeds; }
+    const std::vector<SeedSpec6>& FixedSeeds() const { return vFixedSeeds; }
     virtual const Checkpoints::CCheckpointData& Checkpoints() const = 0;
     int PoolMaxTransactions() const { return nPoolMaxTransactions; }
     std::string ObfuscationPoolDummyAddress() const { return strObfuscationPoolDummyAddress; }
@@ -103,6 +111,12 @@ public:
     int LAST_POW_BLOCK() const { return nLastPOWBlock; }
     int START_POA_BLOCK() const { return nStartPOABlock; }
     int SoftFork() const { return nSoftForkBlock;}
+    int PoANewDiff() const { return nPoANewDiff;}
+    int PoAFixTime() const { return nPoAFixTime;}
+    int PoAPaddingBlock() const { return nPoAPaddingBlock;}
+    int PoAPadding() const { return nPoAPadding;}
+    int BIP65ActivationHeight() const { return nBIP65ActivationHeight; }
+    int HardFork() const { return nHardForkBlock;}
 
     //For PoA block time
     int POA_BLOCK_TIME() const { return nPoABlockTime; }
@@ -130,17 +144,24 @@ protected:
     int64_t nTargetSpacing;
     int nStartPOABlock;
     int nSoftForkBlock;
+    int nHardForkBlock;
+    int nPoANewDiff;
+    int nPoAFixTime;
+    int nPoAPaddingBlock;
+    int nPoAPadding;
     int nMasternodeCountDrift;
     int nMaturity;
     int nModifierUpdateBlock;
     CAmount nMaxMoneyOut;
+    CAmount nMNCollateralAmt;
+    CAmount nMinimumStakeAmount;
     int nMinerThreads;
     std::vector<CDNSSeedData> vSeeds;
     std::vector<unsigned char> base58Prefixes[MAX_BASE58_TYPES];
     CBaseChainParams::Network networkID;
     std::string strNetworkID;
     CBlock genesis;
-    std::vector<CAddress> vFixedSeeds;
+    std::vector<SeedSpec6> vFixedSeeds;
     bool fRequireRPCPassword;
     bool fMiningRequiresPeers;
     bool fAllowMinDifficultyBlocks;
@@ -154,6 +175,7 @@ protected:
     std::string strObfuscationPoolDummyAddress;
     int64_t nStartMasternodePayments;
     int64_t nBudget_Fee_Confirmations;
+    int nBIP65ActivationHeight;
 
     //For PoA blocks
     int nPoABlockTime;

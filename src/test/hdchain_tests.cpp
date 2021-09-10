@@ -9,7 +9,6 @@
 
 #include <boost/test/unit_test.hpp>
 
-using namespace std;
 
 BOOST_AUTO_TEST_SUITE(hd_tests)
 

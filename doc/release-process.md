@@ -116,7 +116,7 @@ The gbuild invocations below <b>DO NOT DO THIS</b> by default.
     mv build/out/prcycoin-*.tar.gz build/out/prcycoin-*.dmg ../
 
     ./bin/gbuild --memory 3000 --commit prcycoin=v${VERSION} ../prcycoin/contrib/gitian-descriptors/gitian-aarch64.yml
-    ./bin/gsign --signer $SIGNER --release ${VERSION}-linux --destination ../gitian.sigs/ ../prcycoin/contrib/gitian-descriptors/gitian-aarch64.yml
+    ./bin/gsign --signer $SIGNER --release ${VERSION}-aarch64 --destination ../gitian.sigs/ ../prcycoin/contrib/gitian-descriptors/gitian-aarch64.yml
     mv build/out/prcycoin-*.tar.gz build/out/src/prcycoin-*.tar.gz ../
     popd
 
@@ -209,7 +209,6 @@ Create (and optionally verify) the signed Windows binaries:
     ./bin/gsign --signer $SIGNER --release ${VERSION}-win-signed --destination ../gitian.sigs/ ../prcycoin/contrib/gitian-descriptors/gitian-win-signer.yml
     ./bin/gverify -v -d ../gitian.sigs/ -r ${VERSION}-win-signed ../prcycoin/contrib/gitian-descriptors/gitian-win-signer.yml
     mv build/out/prcycoin-*win64-setup.exe ../prcycoin-${VERSION}-win64-setup.exe
-    mv build/out/prcycoin-*win32-setup.exe ../prcycoin-${VERSION}-win32-setup.exe
     popd
 
 Commit your signature for the signed OS X/Windows binaries:
@@ -238,8 +237,6 @@ prcycoin-${VERSION}-x86_64-linux-gnu.tar.gz
 prcycoin-${VERSION}-osx64.tar.gz
 prcycoin-${VERSION}-osx.dmg
 prcycoin-${VERSION}.tar.gz
-prcycoin-${VERSION}-win32-setup.exe
-prcycoin-${VERSION}-win32.zip
 prcycoin-${VERSION}-win64-setup.exe
 prcycoin-${VERSION}-win64.zip
 ```

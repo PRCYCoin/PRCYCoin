@@ -1,14 +1,15 @@
 ---
 name: "prcycoin-win-signer"
 suites:
-- "trusty"
+- "bionic"
 architectures:
 - "amd64"
 packages:
-- "libssl-dev"
+# Once osslsigncode supports openssl 1.1, we can change this back to libssl-dev
+- "libssl1.0-dev"
 - "autoconf"
 remotes:
-- "url": "https://github.com/prcycoin-project/prcycoin-detached-sigs.git"
+- "url": "https://github.com/prcycoin/prcycoin-detached-sigs.git"
   "dir": "signature"
 files:
 - "osslsigncode-1.7.1.tar.gz"

@@ -9,13 +9,12 @@
 
 
 #include "clientversion.h"
+#include "fs.h"
 #include "main.h"
 #include "utiltime.h"
 
 #include <cstdio>
 
-#include <boost/filesystem/operations.hpp>
-#include <boost/filesystem/path.hpp>
 #include <boost/test/unit_test.hpp>
 
 #ifdef DISABLE_PASSED_TEST
@@ -23,7 +22,6 @@ BOOST_AUTO_TEST_SUITE(CheckBlock_tests)
 
 bool read_block(const std::string& filename, CBlock& block)
 {
-    namespace fs = boost::filesystem;
     fs::path testFile = fs::current_path() / "data" / filename;
 #ifdef TEST_DATA_DIR
     if (!fs::exists(testFile))
@@ -31,7 +29,7 @@ bool read_block(const std::string& filename, CBlock& block)
         testFile = fs::path(BOOST_PP_STRINGIZE(TEST_DATA_DIR)) / filename;
     }
 #endif
-    FILE* fp = fopen(testFile.string().c_str(), "rb");
+    FILE* fp = fsbridge::fopen(testFile.string().c_str(), "rb");
     if (!fp) return false;
 
     fseek(fp, 8, SEEK_SET); // skip msgheader/size

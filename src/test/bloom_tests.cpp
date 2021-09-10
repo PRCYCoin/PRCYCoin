@@ -19,8 +19,6 @@
 #include <boost/test/unit_test.hpp>
 #include <boost/tuple/tuple.hpp>
 
-using namespace std;
-using namespace boost::tuples;
 
 #ifdef DISABLE_PASSED_TEST
 BOOST_AUTO_TEST_SUITE(bloom_tests)

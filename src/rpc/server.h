@@ -176,6 +176,7 @@ extern std::string HelpRequiringPassphrase();
 extern std::string HelpExampleCli(std::string methodname, std::string args);
 extern std::string HelpExampleRpc(std::string methodname, std::string args);
 
+extern void EnsureWallet();
 extern void EnsureWalletIsUnlocked(bool fAllowAnonOnly = false);
 
 extern UniValue getconnectioncount(const UniValue& params, bool fHelp); // in rpcnet.cpp
@@ -281,6 +282,7 @@ extern UniValue signrawtransaction(const UniValue& params, bool fHelp);
 extern UniValue sendrawtransaction(const UniValue& params, bool fHelp);
 
 extern UniValue getsupply(const UniValue& params, bool fHelp); // in rpc/blockchain.cpp
+extern UniValue getmaxsupply(const UniValue& params, bool fHelp); // in rpc/blockchain.cpp
 extern UniValue getblockcount(const UniValue& params, bool fHelp); // in rpc/blockchain.cpp
 extern UniValue getbestblockhash(const UniValue& params, bool fHelp);
 extern UniValue waitfornewblock(const UniValue& params, bool fHelp);
@@ -291,6 +293,11 @@ extern UniValue settxfee(const UniValue& params, bool fHelp);
 extern UniValue getmempoolinfo(const UniValue& params, bool fHelp);
 extern UniValue getrawmempool(const UniValue& params, bool fHelp);
 extern UniValue getblockhash(const UniValue& params, bool fHelp);
+extern UniValue getlastpoablock(const UniValue& params, bool fHelp);
+extern UniValue getlastpoablockhash(const UniValue& params, bool fHelp);
+extern UniValue getlastpoablockheight(const UniValue& params, bool fHelp);
+extern UniValue getlastpoablocktime(const UniValue& params, bool fHelp);
+extern UniValue getlastpoaauditedpos(const UniValue& params, bool fHelp);
 extern UniValue setmaxreorgdepth(const UniValue& params, bool fHelp);
 extern UniValue resyncfrom(const UniValue& params, bool fHelp);
 extern UniValue getblock(const UniValue& params, bool fHelp);
@@ -337,6 +344,7 @@ extern UniValue mnfinalbudget(const UniValue& params, bool fHelp);
 extern UniValue checkbudgets(const UniValue& params, bool fHelp);
 
 extern UniValue getinfo(const UniValue& params, bool fHelp); // in rpcmisc.cpp
+extern UniValue getversion(const UniValue& params, bool fHelp); // in rpcmisc.cpp
 extern UniValue mnsync(const UniValue& params, bool fHelp);
 extern UniValue validateaddress(const UniValue& params, bool fHelp);
 extern UniValue createmultisig(const UniValue& params, bool fHelp);

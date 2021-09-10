@@ -3,6 +3,7 @@
 // Copyright (c) 2014-2015 The Dash developers
 // Copyright (c) 2015-2018 The PIVX developers
 // Copyright (c) 2018-2020 The DAPS Project developers
+// Copyright (c) 2020-2021 The PRCY developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -30,7 +31,6 @@ extern CWallet* pwalletMain;
 #include <boost/thread.hpp>
 #include <boost/tuple/tuple.hpp>
 
-using namespace std;
 
 //////////////////////////////////////////////////////////////////////////////
 //
@@ -49,7 +49,7 @@ class COrphan
 {
 public:
     const CTransaction* ptx;
-    set<uint256> setDependsOn;
+    std::set<uint256> setDependsOn;
     CFeeRate feeRate;
     double dPriority;
 
@@ -109,7 +109,7 @@ uint32_t GetListOfPoSInfo(uint32_t currentHeight, std::vector<PoSBlockSummary>& 
     }
     if (nloopIdx <= Params().START_POA_BLOCK()) {
         //this is the first PoA block ==> take all PoS blocks from LAST_POW_BLOCK up to currentHeight - 60 inclusive
-        for (int i = Params().LAST_POW_BLOCK() + 1; i <= Params().LAST_POW_BLOCK() + 60; i++) {
+        for (int i = Params().LAST_POW_BLOCK() + 1; i <= Params().LAST_POW_BLOCK() + (size_t)Params().MAX_NUM_POS_BLOCKS_AUDITED(); i++) {
             PoSBlockSummary pos;
             pos.hash = chainActive[i]->GetBlockHash();
             CBlockIndex* pindex = mapBlockIndex[pos.hash];
@@ -124,7 +124,7 @@ uint32_t GetListOfPoSInfo(uint32_t currentHeight, std::vector<PoSBlockSummary>& 
             CBlockIndex* pblockindex = chainActive[start];
             CBlock block;
             if (!ReadBlockFromDisk(block, pblockindex))
-                throw runtime_error("Can't read block from disk");
+                throw std::runtime_error("Can't read block from disk");
             PoSBlockSummary back = block.posBlocksAudited.back();
             uint32_t lastAuditedHeight = back.height;
             uint32_t nextAuditHeight = lastAuditedHeight + 1;
@@ -133,7 +133,7 @@ uint32_t GetListOfPoSInfo(uint32_t currentHeight, std::vector<PoSBlockSummary>& 
                 CBlockIndex* posIndex = chainActive[nextAuditHeight];
                 CBlock posBlock;
                 if (!ReadBlockFromDisk(posBlock, posIndex))
-                    throw runtime_error("Can't read block from disk");
+                    throw std::runtime_error("Can't read block from disk");
                 if (posBlock.IsProofOfStake()) {
                     PoSBlockSummary pos;
                     pos.hash = chainActive[nextAuditHeight]->GetBlockHash();
@@ -158,7 +158,7 @@ CBlockTemplate* CreateNewBlock(const CScript& scriptPubKeyIn, const CPubKey& txP
     CReserveKey reservekey(pwallet);
 
     // Create new block
-    unique_ptr<CBlockTemplate> pblocktemplate(new CBlockTemplate());
+    std::unique_ptr<CBlockTemplate> pblocktemplate(new CBlockTemplate());
     if (!pblocktemplate.get())
         return NULL;
 
@@ -180,7 +180,7 @@ CBlockTemplate* CreateNewBlock(const CScript& scriptPubKeyIn, const CPubKey& txP
     std::copy(txPriv.begin(), txPriv.end(), std::back_inserter(txNew.vout[0].txPriv));
 
     CBlockIndex* prev = chainActive.Tip();
-    CAmount nValue = GetBlockValue(prev);
+    CAmount nValue = GetBlockValue(prev->nHeight);
     txNew.vout[0].nValue = nValue;
 
     pblock->vtx.push_back(txNew);
@@ -244,15 +244,15 @@ CBlockTemplate* CreateNewBlock(const CScript& scriptPubKeyIn, const CPubKey& txP
         CCoinsViewCache view(pcoinsTip);
 
         // Priority order to process transactions
-        list<COrphan> vOrphan; // list memory doesn't move
-        map<uint256, vector<COrphan*> > mapDependers;
+        std::list<COrphan> vOrphan; // list memory doesn't move
+        std::map<uint256, std::vector<COrphan*> > mapDependers;
         bool fPrintPriority = GetBoolArg("-printpriority", false);
 
         // This vector will be sorted into a priority queue:
-        vector<TxPriority> vecPriority;
+        std::vector<TxPriority> vecPriority;
         vecPriority.reserve(mempool.mapTx.size());
         std::set<CKeyImage> keyImages;
-        for (map<uint256, CTxMemPoolEntry>::iterator mi = mempool.mapTx.begin();
+        for (std::map<uint256, CTxMemPoolEntry>::iterator mi = mempool.mapTx.begin();
              mi != mempool.mapTx.end(); ++mi) {
             const CTransaction& tx = mi->second.GetTx();
             if (tx.IsCoinBase() || tx.IsCoinStake() || !IsFinalTx(tx, nHeight)) {
@@ -310,8 +310,8 @@ CBlockTemplate* CreateNewBlock(const CScript& scriptPubKeyIn, const CPubKey& txP
         TxPriorityCompare comparer(fSortedByFee);
         std::make_heap(vecPriority.begin(), vecPriority.end(), comparer);
 
-        vector<CBigNum> vBlockSerials;
-        vector<CBigNum> vTxSerials;
+        std::vector<CBigNum> vBlockSerials;
+        std::vector<CBigNum> vTxSerials;
         while (!vecPriority.empty()) {
             // Take highest priority transaction off the priority queue:
             double dPriority = vecPriority.front().get<0>();
@@ -475,7 +475,7 @@ CBlockTemplate* CreateNewPoABlock(const CScript& scriptPubKeyIn, const CPubKey& 
     }
 
     // Create new block
-    unique_ptr<CBlockTemplate> pblocktemplate(new CBlockTemplate());
+    std::unique_ptr<CBlockTemplate> pblocktemplate(new CBlockTemplate());
     if (!pblocktemplate.get())
         return NULL;
     CBlock* pblock = &pblocktemplate->block; // pointer for convenience
@@ -503,19 +503,19 @@ CBlockTemplate* CreateNewPoABlock(const CScript& scriptPubKeyIn, const CPubKey& 
 
     int nprevPoAHeight;
 
-
     nprevPoAHeight = GetListOfPoSInfo(pindexPrev->nHeight, pblock->posBlocksAudited);
+
     if (pblock->posBlocksAudited.size() == 0) {
         return NULL;
     }
+
     // Set block version to differentiate PoA blocks from PoS blocks
     pblock->SetVersionPoABlock();
     pblock->nTime = GetAdjustedTime();
 
     //compute PoA block reward
-    CAmount nReward = pblock->posBlocksAudited.size() * 0.5 * COIN;
+    CAmount nReward = pblock->posBlocksAudited.size() * 0.25 * COIN;
     pblock->vtx[0].vout[0].nValue = nReward;
-
     pblock->vtx[0].txType = TX_TYPE_REVEAL_AMOUNT;
 
     CPubKey sharedSec;
@@ -702,7 +702,7 @@ void BitcoinMiner(CWallet* pwallet, bool fProofOfStake, MineType mineType)
 
             if (mapHashedBlocks.count(chainActive.Tip()->nHeight)) //search our map of hashed blocks, see if bestblock has been hashed yet
             {
-                if (GetTime() - mapHashedBlocks[chainActive.Tip()->nHeight] < max(pwallet->nHashInterval, (unsigned int)1)) // wait half of the nHashDrift with max wait of 3 minutes
+                if (GetTime() - mapHashedBlocks[chainActive.Tip()->nHeight] < std::max(pwallet->nHashInterval, (unsigned int)1)) // wait half of the nHashDrift with max wait of 3 minutes
                 {
                     MilliSleep(5000);
                     continue;
@@ -722,7 +722,7 @@ void BitcoinMiner(CWallet* pwallet, bool fProofOfStake, MineType mineType)
         if (!pindexPrev)
             continue;
 
-        unique_ptr<CBlockTemplate> pblocktemplate(CreateNewBlockWithKey(reservekey, pwallet, fProofOfStake));
+        std::unique_ptr<CBlockTemplate> pblocktemplate(CreateNewBlockWithKey(reservekey, pwallet, fProofOfStake));
         if (!pblocktemplate.get())
             continue;
 

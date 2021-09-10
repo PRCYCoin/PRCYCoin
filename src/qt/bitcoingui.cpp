@@ -225,6 +225,7 @@ BitcoinGUI::BitcoinGUI(const NetworkStyle* networkStyle, QWidget* parent) : QMai
     connect(openConfEditorAction, SIGNAL(triggered()), rpcConsole, SLOT(showConfEditor()));
     connect(openMNConfEditorAction, SIGNAL(triggered()), rpcConsole, SLOT(showMNConfEditor()));
     connect(showDataDirAction, SIGNAL(triggered()), rpcConsole, SLOT(showDataDir()));
+    connect(showQtDirAction, SIGNAL(triggered()), rpcConsole, SLOT(showQtDir()));
     connect(showBackupsAction, SIGNAL(triggered()), rpcConsole, SLOT(showBackups()));
     connect(labelConnectionsIcon, SIGNAL(clicked()), rpcConsole, SLOT(showPeers()));
     connect(labelEncryptionIcon, SIGNAL(clicked()), walletFrame, SLOT(toggleLockWallet()));
@@ -370,6 +371,11 @@ void BitcoinGUI::createActions(const NetworkStyle* networkStyle)
     optionsAction->setMenuRole(QAction::PreferencesRole);
     optionsAction->setToolTip(optionsAction->statusTip());
     optionsAction->setCheckable(true);
+#ifdef Q_OS_MAC
+        optionsAction->setShortcut(QKeySequence(Qt::CTRL + Qt::Key_6));
+#else
+        optionsAction->setShortcut(QKeySequence(Qt::ALT + Qt::Key_6));
+#endif
     tabGroup->addAction(optionsAction);
 
     stakingAction = new QAction(QIcon(":/icons/options"), tr("&Staking"), this);
@@ -424,6 +430,9 @@ void BitcoinGUI::createActions(const NetworkStyle* networkStyle)
     showDataDirAction = new QAction(QIcon(":/icons/browse"), tr("Show &PRCYcoin Folder"), this);
     showDataDirAction->setStatusTip(tr("Show the PRCYcoin folder"));
     showDataDirAction->setShortcut(Qt::Key_F2);
+    showQtDirAction = new QAction(QIcon(":/icons/browse"), tr("Show &Qt Folder"), this);
+    showQtDirAction->setStatusTip(tr("Show the Qt folder"));
+    showQtDirAction->setShortcut(Qt::Key_F3);
     showBackupsAction = new QAction(QIcon(":/icons/browse"), tr("Show Automatic &Backups"), this);
     showBackupsAction->setStatusTip(tr("Show automatically created wallet backups"));
 
@@ -465,10 +474,16 @@ void BitcoinGUI::createActions(const NetworkStyle* networkStyle)
     openFAQAction->setStatusTip(tr("Frequently Asked Questions"));
     openGitWikiAction = new QAction(QApplication::style()->standardIcon(QStyle::SP_MessageBoxInformation), tr("&GitHub Wiki"), this);
     openGitWikiAction->setStatusTip(tr("GitHub Wiki"));
-    openBlockExplorerAPIAction = new QAction(QApplication::style()->standardIcon(QStyle::SP_MessageBoxInformation), tr("&Blockhain Explorer API"), this);
-    openBlockExplorerAPIAction->setStatusTip(tr("Blockhain Explorer API"));
+    openBlockExplorerAPIAction = new QAction(QApplication::style()->standardIcon(QStyle::SP_MessageBoxInformation), tr("&Blockchain Explorer API"), this);
+    openBlockExplorerAPIAction->setStatusTip(tr("Blockchain Explorer API"));
     openBootStrapAction = new QAction(QApplication::style()->standardIcon(QStyle::SP_MessageBoxInformation), tr("&BootStrap"), this);
     openBootStrapAction->setStatusTip(tr("BootStrap Link"));
+    openBridgeAction = new QAction(QApplication::style()->standardIcon(QStyle::SP_MessageBoxInformation), tr("&Bridge"), this);
+    openBridgeAction->setStatusTip(tr("Bridge Link"));
+    openDexAction = new QAction(QApplication::style()->standardIcon(QStyle::SP_MessageBoxInformation), tr("&PRivaCY DEX"), this);
+    openDexAction->setStatusTip(tr("PRivaCY Dex Link"));
+    openCheckerAction = new QAction(QApplication::style()->standardIcon(QStyle::SP_MessageBoxInformation), tr("&PRCY Checker"), this);
+    openCheckerAction->setStatusTip(tr("PRCY Checker Link"));
     openTGTechSupportAction = new QAction(QIcon(":/icons/telegram"), tr("&Telegram Tech Support"), this);
     openTGTechSupportAction->setStatusTip(tr("Telegram Tech Support"));
     openTGMNSupportAction = new QAction(QIcon(":/icons/telegram"), tr("&Telegram Masternode Support"), this);
@@ -488,6 +503,9 @@ void BitcoinGUI::createActions(const NetworkStyle* networkStyle)
     connect(openGitWikiAction, SIGNAL(triggered()), this, SLOT(openGitWikiClicked()));
     connect(openBlockExplorerAPIAction, SIGNAL(triggered()), this, SLOT(openBlockExplorerAPIClicked()));
     connect(openBootStrapAction, SIGNAL(triggered()), this, SLOT(openBootStrapClicked()));
+    connect(openBridgeAction, SIGNAL(triggered()), this, SLOT(openBridgeClicked()));
+    connect(openDexAction, SIGNAL(triggered()), this, SLOT(openDexClicked()));
+    connect(openCheckerAction, SIGNAL(triggered()), this, SLOT(openCheckerClicked()));
     connect(openTGTechSupportAction, SIGNAL(triggered()), this, SLOT(openTGTechSupportClicked()));
     connect(openTGMNSupportAction, SIGNAL(triggered()), this, SLOT(openTGMNSupportClicked()));
     connect(openDiscordSupportAction, SIGNAL(triggered()), this, SLOT(openDiscordSupportClicked()));
@@ -564,6 +582,7 @@ void BitcoinGUI::createMenuBar()
         tools->addAction(openConfEditorAction);
         tools->addAction(openMNConfEditorAction);
         tools->addAction(showDataDirAction);
+        tools->addAction(showQtDirAction);
         tools->addAction(showBackupsAction);
         tools->addAction(openBlockExplorerAction);
     }
@@ -571,13 +590,13 @@ void BitcoinGUI::createMenuBar()
     QMenu* socials = appMenuBar->addMenu(tr("Social"));
     socials->addAction(facebookAction);
     socials->addAction(twitterAction);
-    //socials->addAction(discordAction);
+    socials->addAction(discordAction);
     socials->addAction(telegramOfficialAction);
     socials->addAction(telegramLoungeAction);
     socials->addAction(mediumAction);
     //socials->addAction(steemitAction);
     socials->addAction(instagramAction);
-    //socials->addAction(redditAction);
+    socials->addAction(redditAction);
 
     QMenu* help = appMenuBar->addMenu(tr("&Help"));
     help->addAction(showHelpMessageAction);
@@ -587,6 +606,9 @@ void BitcoinGUI::createMenuBar()
     help->addSeparator();
     help->addAction(openBlockExplorerAPIAction);
     help->addAction(openBootStrapAction);
+    help->addAction(openBridgeAction);
+    help->addAction(openDexAction);
+    help->addAction(openCheckerAction);
     help->addSeparator();
     help->addAction(openTGTechSupportAction);
     //help->addAction(openTGMNSupportAction);
@@ -813,6 +835,7 @@ void BitcoinGUI::createTrayIconMenu()
     trayIconMenu->addAction(openConfEditorAction);
     trayIconMenu->addAction(openMNConfEditorAction);
     trayIconMenu->addAction(showDataDirAction);
+    trayIconMenu->addAction(showQtDirAction);
     trayIconMenu->addAction(showBackupsAction);
     trayIconMenu->addAction(openBlockExplorerAction);
 #ifndef Q_OS_MAC // This is built-in on Mac
@@ -851,7 +874,7 @@ void BitcoinGUI::twitterActionClicked()
 }
 void BitcoinGUI::discordActionClicked()
 {
-    QDesktopServices::openUrl(QUrl("https://prcycoin.com/discord"));
+    QDesktopServices::openUrl(QUrl("https://discord.prcycoin.com"));
 }
 void BitcoinGUI::telegramOfficialActionClicked()
 {
@@ -927,6 +950,21 @@ void BitcoinGUI::openTGMNSupportClicked()
 void BitcoinGUI::openDiscordSupportClicked()
 {
     QDesktopServices::openUrl(QUrl("https://discord.gg/8vbXJMf"));
+}
+
+void BitcoinGUI::openBridgeClicked()
+{
+    QDesktopServices::openUrl(QUrl("https://bridge.prcycoin.com"));
+}
+
+void BitcoinGUI::openDexClicked()
+{
+    QDesktopServices::openUrl(QUrl("https://privacydex.io"));
+}
+
+void BitcoinGUI::openCheckerClicked()
+{
+    QDesktopServices::openUrl(QUrl("https://prcycoin.com/prcy-checker"));
 }
 
 void BitcoinGUI::checkForUpdatesClicked()
@@ -1290,7 +1328,7 @@ void BitcoinGUI::setStakingStatus()
         fMultiSend = pwalletMain->isMultiSendEnabled();
         stkStatus = pwalletMain->ReadStakingStatus();
     }
-    if (!stkStatus || pwalletMain->stakingMode == StakingMode::STOPPED || pwalletMain->IsLocked()) {
+    if (!stkStatus || pwalletMain->IsLocked()) {
         LogPrint("staking","Checking Staking Status: Disabled.\n");
         stakingState->setText(tr("Staking Disabled"));
         stakingState->setToolTip("Staking Disabled");
