@@ -11,7 +11,6 @@
 
 #include <boost/test/unit_test.hpp>
 
-using namespace std;
 
 #ifdef DISABLE_PASSED_TEST
 BOOST_AUTO_TEST_SUITE(netbase_tests)

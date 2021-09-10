@@ -19,7 +19,6 @@
 // we repeat those tests this many times and only complain if all iterations of the test fail
 #define RANDOM_REPEATS 5
 
-using namespace std;
 
 typedef set<pair<const CWalletTx*,unsigned int> > CoinSet;
 extern CWallet* pwalletMain;

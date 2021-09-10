@@ -8,7 +8,7 @@
 #ifndef BITCOIN_TXDB_H
 #define BITCOIN_TXDB_H
 
-#include "leveldbwrapper.h"
+#include "dbwrapper.h"
 #include "main.h"
 
 #include <map>
@@ -30,7 +30,7 @@ static const int64_t nMinDbCache = 4;
 class CCoinsViewDB : public CCoinsView
 {
 protected:
-    CLevelDBWrapper db;
+    CDBWrapper db;
 
 public:
     CCoinsViewDB(size_t nCacheSize, bool fMemory = false, bool fWipe = false);
@@ -43,7 +43,7 @@ public:
 };
 
 /** Access to the block database (blocks/index/) */
-class CBlockTreeDB : public CLevelDBWrapper
+class CBlockTreeDB : public CDBWrapper
 {
 public:
     CBlockTreeDB(size_t nCacheSize, bool fMemory = false, bool fWipe = false);
@@ -67,9 +67,9 @@ public:
     bool ReadInt(const std::string& name, int& nValue);
     bool LoadBlockIndexGuts();
 
-    bool ReadKeyImage(const string& keyImage, uint256& bh);
-    bool ReadKeyImages(const string& keyImage, std::vector<uint256>& bhs);
+    bool ReadKeyImage(const std::string& keyImage, uint256& bh);
+    bool ReadKeyImages(const std::string& keyImage, std::vector<uint256>& bhs);
 
-    bool WriteKeyImage(const string& keyImage, const uint256& height);
+    bool WriteKeyImage(const std::string& keyImage, const uint256& height);
 };
 #endif // BITCOIN_TXDB_H

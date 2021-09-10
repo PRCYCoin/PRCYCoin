@@ -957,6 +957,11 @@ void RPCConsole::showDataDir()
     GUIUtil::showDataDir();
 }
 
+void RPCConsole::showQtDir()
+{
+    GUIUtil::showQtDir();
+}
+
 void RPCConsole::showBackups()
 {
     GUIUtil::showBackups();

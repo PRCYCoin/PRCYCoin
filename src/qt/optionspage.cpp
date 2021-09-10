@@ -34,7 +34,6 @@
 #include <QFile>
 #include <QTextStream>
 
-using namespace std;
 
 OptionsPage::OptionsPage(QWidget* parent) : QDialog(parent, Qt::WindowSystemMenuHint | Qt::WindowTitleHint | Qt::WindowCloseButtonHint),
                                                           ui(new Ui::OptionsPage),

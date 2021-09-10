@@ -232,7 +232,7 @@ bool CheckPoAContainRecentHash(const CBlock& block)
             CBlock prevPoablock;
             CBlockIndex* pblockindex = pindex;
             if (!ReadBlockFromDisk(prevPoablock, pblockindex))
-                throw runtime_error("Can't read block from disk");
+                throw std::runtime_error("Can't read block from disk");
             PoSBlockSummary lastAuditedPoSBlockInfo = prevPoablock.posBlocksAudited.back();
             uint256 lastAuditedPoSHash = lastAuditedPoSBlockInfo.hash;
             if (mapBlockIndex.count(lastAuditedPoSHash) < 1 && !IsWrongAudit(lastAuditedPoSHash.GetHex(), nHeight)) {
@@ -448,7 +448,7 @@ bool CheckPoABlockNotAuditingOverlap(const CBlock& block)
             CBlockIndex* pPrevPoAIndex = mapBlockIndex[block.hashPrevPoABlock];
             CBlock prevPoablock;
             if (!ReadBlockFromDisk(prevPoablock, pPrevPoAIndex))
-                throw runtime_error("Can't read block from disk");
+                throw std::runtime_error("Can't read block from disk");
             ret = true;
             for (size_t i = 0; i < block.posBlocksAudited.size(); i++) {
                 bool isAlreadyAudited = false;
@@ -505,7 +505,7 @@ bool CheckPoABlockPaddingAmount(const CBlock& block, const CBlockIndex* pindex)
             CBlockIndex* pPrevPoAIndex = mapBlockIndex[block.hashPrevPoABlock];
             CBlock prevPoablock;
             if (!ReadBlockFromDisk(prevPoablock, pPrevPoAIndex))
-                throw runtime_error("Can't read block from disk");
+                throw std::runtime_error("Can't read block from disk");
             prevPoAHeight = pPrevPoAIndex->nHeight;
             for (size_t i = 0; i < block.posBlocksAudited.size(); i++) {
                 lastPoSHeight = block.posBlocksAudited[i].height;
