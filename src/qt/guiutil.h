@@ -6,6 +6,7 @@
 #define BITCOIN_QT_GUIUTIL_H
 
 #include "amount.h"
+#include "fs.h"
 
 #include <QCalendarWidget>
 #include <QEvent>
@@ -17,7 +18,6 @@
 #include <QTableView>
 #include <QTableWidget>
 
-#include <boost/filesystem.hpp>
 
 class QValidatedLineEdit;
 class SendCoinsRecipient;
@@ -109,6 +109,9 @@ QString getOpenFileName(QWidget* parent, const QString& caption, const QString& 
     */
 Qt::ConnectionType blockingGUIThreadConnection();
 
+// Activate, show and raise the widget
+void bringToFront(QWidget* w);
+
 // Determine whether a widget is hidden behind other windows
 bool isObscured(QWidget* w);
 
@@ -123,6 +126,9 @@ void openMNConfigfile();
 
 // Browse DataDir folder
 void showDataDir();
+
+// Browse Qt Dir folder
+void showQtDir();
 
 // Browse backup folder
 void showBackups();
@@ -243,10 +249,10 @@ bool isExternal(QString theme);
 void prompt(QString message);
 
 /* Convert QString to OS specific boost path through UTF-8 */
-boost::filesystem::path qstringToBoostPath(const QString& path);
+fs::path qstringToBoostPath(const QString& path);
 
 /* Convert OS specific boost path to QString through UTF-8 */
-QString boostPathToQString(const boost::filesystem::path& path);
+QString boostPathToQString(const fs::path& path);
 
 /* Convert seconds into a QString with days, hours, mins, secs */
 QString formatDurationStr(int secs);

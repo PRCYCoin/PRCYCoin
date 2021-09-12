@@ -151,7 +151,7 @@ void SendCoinsDialog::on_sendButton_clicked(){
     QString address = recipient.address;
     send_address = recipient.address;
     send_amount = recipient.amount;
-    bool isValidAddresss = (regex_match(address.toStdString(), regex("[a-zA-z0-9]+")))&&(address.length()==99||address.length()==110);
+    bool isValidAddresss = (regex_match(address.toStdString(), std::regex("[a-zA-z0-9]+")))&&(address.length()==99||address.length()==110);
     bool isValidAmount = ((recipient.amount>0) && (recipient.amount<=model->getBalance()));
     bool isMinimumAmount = (recipient.amount >= 5  * COIN);
     bool fAlwaysRequest2FA = settings.value("fAlwaysRequest2FA").toBool();

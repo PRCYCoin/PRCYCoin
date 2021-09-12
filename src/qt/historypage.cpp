@@ -122,7 +122,7 @@ void HistoryPage::on_cellClicked(int row, int column)
                 CWalletTx tx = pwalletMain->mapWallet[hash];
                 for (size_t i = 0; i < tx.vout.size(); i++) {
                     txnouttype type;
-                    vector<CTxDestination> addresses;
+                    std::vector<CTxDestination> addresses;
                     int nRequired;
 
                     if (ExtractDestinations(tx.vout[i].scriptPubKey, type, addresses, nRequired)) {
@@ -199,11 +199,11 @@ void HistoryPage::updateTableData(CWallet* wallet)
             ui->tableView->removeRow(0);
         }
         ui->tableView->setRowCount(0);
-        vector<std::map<QString, QString> > txs;
+        std::vector<std::map<QString, QString> > txs;
         if (wallet->IsLocked()) {
             {
                 LOCK(pwalletMain->cs_wallet);
-                vector<std::map<QString, QString>> txs;// = WalletUtil::getTXs(pwalletMain);
+                std::vector<std::map<QString, QString>> txs;// = WalletUtil::getTXs(pwalletMain);
 
                 std::map<uint256, CWalletTx> txMap = pwalletMain->mapWallet;
                 std::vector<CWalletTx> latestTxes;
@@ -290,9 +290,18 @@ void HistoryPage::updateFilter()
             hide = true;
         if (selectedType != tr("All Types")) {
             if (selectedType == tr("Received")) {
-                hide = !(type == tr("Received") || type == tr("Masternode Reward") || type == tr("Staking Reward") || type == ("PoA Reward"));
-            } else
-                hide = (selectedType != type) || hide;
+                hide = !(type == tr("Received"));
+            } else if (selectedType == tr("Sent")) {
+                hide = !(type == tr("Sent"));
+            } else if (selectedType == tr("Mined")) {
+                hide = !(type == tr("Mined"));
+            } else if (selectedType == tr("Minted")) {
+                hide = !(type == tr("Minted"));
+            } else if (selectedType == tr("Masternode")) {
+                hide = !(type == tr("Masternode"));
+            }
+        } else {
+            hide = !(type == tr("Received")) && !(type == tr("Sent")) && !(type == tr("Mined")) && !(type == tr("Minted")) && !(type == tr("Masternode"));
         }
         if (ui->lineEditDesc->currentText() != allAddressString) {
             bool found = false;
@@ -302,7 +311,7 @@ void HistoryPage::updateFilter()
             hide = !found || hide;
         }
 
-        ui->tableView->setRowHidden(row, false);
+        ui->tableView->setRowHidden(row, hide);
     }
 }
 

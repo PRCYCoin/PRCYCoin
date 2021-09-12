@@ -173,14 +173,7 @@ QCheckBox::indicator {
 }
 .QRadioButton::indicator:checked,
 QCheckBox::indicator:checked {
-  height: 20px;
-  width: 20px;
-  background-color: #000000;
-  border-style: solid;
-  border-radius: 13px;
-  border-color: whitesmoke;
-  border-width: 3px;
-  margin: 7px;
+  image: url(":/icons/checkmark");
 }
 
 QGroupBox {

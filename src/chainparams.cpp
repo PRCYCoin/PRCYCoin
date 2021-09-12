@@ -17,8 +17,6 @@
 
 #include <assert.h>
 
-using namespace std;
-using namespace boost::assign;
 
 std::string CDNSSeedData::getHost(uint64_t requiredServiceBits) const {
     //use default host for non-filter-capable seeds or if we use the default service bits (NODE_NETWORK)
@@ -66,11 +64,14 @@ static Checkpoints::MapCheckpoints mapCheckpoints =
     (155116, uint256("929d16db920af3df60cf2e869ee08d174f7d476d65e53cbf07d54b7d1cca2380")) // First PoA Block after fix/difficulty bump
     (193949, uint256("98ed9238e67297071a13b6e62fa17c5c992998a295ea7535cdcd4c3dda8aeab3")) // First PoA Block after fix/difficulty bump
     (260162, uint256("97d593c9ebbcc219eeed822f05ba4291e7dcc4c3667836dbfe29667fe31808a7"))
+    (369757, uint256("445cc1e7abeca5bd13669704241efb9c045bf414d80c5173c7f80018381ba5a3"))
+    (370034, uint256("2c98b9b6fc800b0ba9836669c1474a95d1e4afd2a91edbec25d3bc05636deab3"))
+    (385916, uint256("05c5ff466e345d9ab1a8a029b748f130c8707b8c4ce9dd315fc7f6760d1857c8"))
     ;
 static const Checkpoints::CCheckpointData data = {
     &mapCheckpoints,
-    1623031617,          // * UNIX timestamp of last checkpoint block
-    533276,          // * total number of transactions between genesis and last checkpoint
+    1630614117,          // * UNIX timestamp of last checkpoint block
+    812753,          // * total number of transactions between genesis and last checkpoint
                 //   (the tx=... number in the SetBestChain debug.log lines)
     1440        // * estimated number of transactions per day after checkpoint
 };
@@ -122,6 +123,7 @@ public:
         MAX_MONEY = 70000000.0;
         nMaxMoneyOut = MAX_MONEY * COIN;
         nMNCollateralAmt = 5000 * COIN;
+        nMinimumStakeAmount = 2500 * COIN;
 
         /** Height or Time Based Activations **/
         nLastPOWBlock = 500;
@@ -136,7 +138,7 @@ public:
         nPoAFixTime = 1616716800; // Fork time for PoA fix - Friday, March 26, 2021 12:00:00 AM (GMT)
         nPoAPaddingBlock = 169869; // Last block with 120 PoS blocks in a PoA Audit
         nPoAPadding = 10; // Current PoA Padding
-        nHardForkBlock = 350000; // Add hard fork block for Consensus/PoA Padding
+        nHardForkBlock = 375000; // Add hard fork block for Consensus/PoA Padding
 
         /**
          * Build the genesis block. Note that the output of the genesis coinbase cannot
@@ -152,7 +154,7 @@ public:
         CMutableTransaction txNew;
         txNew.vin.resize(1);
         txNew.vout.resize(1);
-        txNew.vin[0].scriptSig = CScript() << 486604799 << CScriptNum(4) << vector<unsigned char>((const unsigned char*)pszTimestamp, (const unsigned char*)pszTimestamp + strlen(pszTimestamp));
+        txNew.vin[0].scriptSig = CScript() << 486604799 << CScriptNum(4) << std::vector<unsigned char>((const unsigned char*)pszTimestamp, (const unsigned char*)pszTimestamp + strlen(pszTimestamp));
         txNew.vout[0].nValue = 0 * COIN;
         txNew.vout[0].scriptPubKey = CScript() << ParseHex("04b78f63269234b741668d85b57ba11edec2ee20f15719db180d5d6a37c4e9db0c494390fb54925934bc7b29f148a372c00273bbd5c939830d7d2941de6ce44b8b") << OP_CHECKSIG;
         genesis.vtx.push_back(txNew);

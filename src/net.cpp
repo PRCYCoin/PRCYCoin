@@ -36,7 +36,6 @@
 #include <miniupnpc/upnperrors.h>
 #endif
 
-#include <boost/filesystem.hpp>
 #include <boost/thread.hpp>
 
 // Dump addresses to peers.dat and banlist.dat every 15 minutes (900s)
@@ -57,8 +56,6 @@
 #endif
 #endif
 
-using namespace boost;
-using namespace std;
 
 namespace {
     const int MAX_OUTBOUND_CONNECTIONS = 16;
@@ -78,7 +75,7 @@ bool fDiscover = true;
 bool fListen = true;
 uint64_t nLocalServices = NODE_NETWORK;
 RecursiveMutex cs_mapLocalHost;
-map <CNetAddr, LocalServiceInfo> mapLocalHost;
+std::map<CNetAddr, LocalServiceInfo> mapLocalHost;
 //static bool vfReachable[NET_MAX] = {};
 static bool vfLimited[NET_MAX] = {};
 static CNode *pnodeLocalHost = NULL;
@@ -89,20 +86,20 @@ int nMaxConnections = DEFAULT_MAX_PEER_CONNECTIONS;
 bool fAddressesInitialized = false;
 std::string strSubVersion;
 
-vector<CNode *> vNodes;
+std::vector<CNode*> vNodes;
 RecursiveMutex cs_vNodes;
-map <CInv, CDataStream> mapRelay;
-deque <pair<int64_t, CInv>> vRelayExpiration;
+std::map<CInv, CDataStream> mapRelay;
+std::deque<std::pair<int64_t, CInv> > vRelayExpiration;
 RecursiveMutex cs_mapRelay;
 limitedmap<CInv, int64_t> mapAlreadyAskedFor(MAX_INV_SZ);
 
-static deque <string> vOneShots;
+static std::deque<std::string> vOneShots;
 RecursiveMutex cs_vOneShots;
 
-set <CNetAddr> setservAddNodeAddresses;
+std::set<CNetAddr> setservAddNodeAddresses;
 RecursiveMutex cs_setservAddNodeAddresses;
 
-vector <std::string> vAddedNodes;
+std::vector<std::string> vAddedNodes;
 RecursiveMutex cs_vAddedNodes;
 
 NodeId nLastNodeId = 0;
@@ -116,7 +113,7 @@ static CNodeSignals g_signals;
 
 CNodeSignals &GetNodeSignals() { return g_signals; }
 
-void AddOneShot(string strDest) {
+void AddOneShot(std::string strDest) {
     LOCK(cs_vOneShots);
     vOneShots.push_back(strDest);
 }
@@ -126,10 +123,10 @@ unsigned short GetListenPort() {
 }
 
 bool IsUnsupportedVersion(std::string strSubVer, int nHeight) {
-    if (nHeight >= Params().HardFork()) {
-        return (strSubVer == "/PRCY:1.0.0.2/" || strSubVer == "/PRCY:1.0.0.3/" || strSubVer == "/PRCY:1.0.0.4/" || strSubVer == "/PRCY:1.0.0.5/" || strSubVer == "/PRCY:1.0.0.6/");
-    }
-    return (strSubVer == "/PRCY:1.0.0.2/" || strSubVer == "/PRCY:1.0.0.3/" || strSubVer == "/PRCY:1.0.0.4/" || strSubVer == "/PRCY:1.0.0.5/");
+    /*if (nHeight >= Params().HardFork()) {
+        return (strSubVer == "/PRCY:1.0.0.2/" || strSubVer == "/PRCY:1.0.0.3/" || strSubVer == "/PRCY:1.0.0.4/" || strSubVer == "/PRCY:1.0.0.5/" || strSubVer == "/PRCY:1.0.0.6/" || strSubVer == "/PRCY:1.0.0.7/");
+    }*/
+    return (strSubVer == "/PRCY:1.0.0.2/" || strSubVer == "/PRCY:1.0.0.3/" || strSubVer == "/PRCY:1.0.0.4/" || strSubVer == "/PRCY:1.0.0.5/" || strSubVer == "/PRCY:1.0.0.6/" || strSubVer == "/PRCY:1.0.0.7/");
 }
 
 // find 'best' local address for a particular peer
@@ -141,7 +138,7 @@ bool GetLocal(CService &addr, const CNetAddr *paddrPeer) {
     int nBestReachability = -1;
     {
         LOCK(cs_mapLocalHost);
-        for (map<CNetAddr, LocalServiceInfo>::iterator it = mapLocalHost.begin(); it != mapLocalHost.end(); it++) {
+        for (std::map<CNetAddr, LocalServiceInfo>::iterator it = mapLocalHost.begin(); it != mapLocalHost.end(); it++) {
             int nScore = (*it).second.nScore;
             int nReachability = (*it).first.GetReachabilityFrom(paddrPeer);
             if (nReachability > nBestReachability || (nReachability == nBestReachability && nScore > nBestScore)) {
@@ -189,7 +186,7 @@ CAddress GetLocalAddress(const CNetAddr *paddrPeer) {
     return ret;
 }
 
-bool RecvLine(SOCKET hSocket, string &strLine) {
+bool RecvLine(SOCKET hSocket, std::string& strLine) {
     strLine = "";
     while (true) {
         char c;
@@ -467,7 +464,7 @@ void CNode::CloseSocketDisconnect() {
         vRecvMsg.clear();
 }
 
-bool CNode::DisconnectOldProtocol(int nVersionRequired, string strLastCommand) {
+bool CNode::DisconnectOldProtocol(int nVersionRequired, std::string strLastCommand) {
     fDisconnect = false;
     if (nVersion < nVersionRequired) {
         LogPrintf("%s : peer=%d using obsolete version %i; disconnecting\n", __func__, id, nVersion);
@@ -823,7 +820,7 @@ void SocketSendData(CNode *pnode) {
     pnode->vSendMsg.erase(pnode->vSendMsg.begin(), it);
 }
 
-static list<CNode *> vNodesDisconnected;
+static std::list<CNode*> vNodesDisconnected;
 
 void ThreadSocketHandler() {
     unsigned int nPrevNodeCount = 0;
@@ -834,7 +831,7 @@ void ThreadSocketHandler() {
         {
             LOCK(cs_vNodes);
             // Disconnect unused nodes
-            vector < CNode * > vNodesCopy = vNodes;
+            std::vector<CNode*> vNodesCopy = vNodes;
             for (CNode * pnode : vNodesCopy)
             {
                 if (pnode->fDisconnect ||
@@ -858,7 +855,7 @@ void ThreadSocketHandler() {
         }
         {
             // Delete disconnected nodes
-            list < CNode * > vNodesDisconnectedCopy = vNodesDisconnected;
+            std::list<CNode*> vNodesDisconnectedCopy = vNodesDisconnected;
             for (CNode * pnode : vNodesDisconnectedCopy)
             {
                 // wait until threads are done using it
@@ -910,7 +907,7 @@ void ThreadSocketHandler() {
 
         for (const ListenSocket &hListenSocket : vhListenSocket) {
             FD_SET(hListenSocket.socket, &fdsetRecv);
-            hSocketMax = max(hSocketMax, hListenSocket.socket);
+            hSocketMax = std::max(hSocketMax, hListenSocket.socket);
             have_fds = true;
         }
 
@@ -921,7 +918,7 @@ void ThreadSocketHandler() {
                 if (pnode->hSocket == INVALID_SOCKET)
                     continue;
                 FD_SET(pnode->hSocket, &fdsetError);
-                hSocketMax = max(hSocketMax, pnode->hSocket);
+                hSocketMax = std::max(hSocketMax, pnode->hSocket);
                 have_fds = true;
 
                 // Implement the following logic:
@@ -1023,7 +1020,7 @@ void ThreadSocketHandler() {
         //
         // Service each socket
         //
-        vector < CNode * > vNodesCopy;
+        std::vector<CNode*> vNodesCopy;
         {
             LOCK(cs_vNodes);
             vNodesCopy = vNodes;
@@ -1156,7 +1153,7 @@ void ThreadMapPort()
             }
         }
 
-        string strDesc = "PRCY " + FormatFullVersion();
+        std::string strDesc = "PRCY " + FormatFullVersion();
 
         try {
             while (true) {
@@ -1237,7 +1234,7 @@ void ThreadDNSAddressSeed() {
         }
     }
 
-    const vector <CDNSSeedData> &vSeeds = Params().DNSSeeds();
+    const std::vector<CDNSSeedData>& vSeeds = Params().DNSSeeds();
     int found = 0;
 
     LogPrintf("Loading addresses from DNS seeds (could take a while)\n");
@@ -1246,8 +1243,8 @@ void ThreadDNSAddressSeed() {
         if (HaveNameProxy()) {
             AddOneShot(seed.host);
         } else {
-            vector <CNetAddr> vIPs;
-            vector <CAddress> vAdd;
+            std::vector<CNetAddr> vIPs;
+            std::vector<CAddress> vAdd;
             uint64_t requiredServiceBits = NODE_NETWORK;
             if (LookupHost(seed.getHost(requiredServiceBits).c_str(), vIPs, 0, true)) {
                 for (CNetAddr & ip : vIPs)
@@ -1292,7 +1289,7 @@ void DumpData() {
 }
 
 void static ProcessOneShot() {
-    string strDest;
+    std::string strDest;
     {
         LOCK(cs_vOneShots);
         if (vOneShots.empty())
@@ -1312,7 +1309,7 @@ void ThreadOpenConnections() {
     if (mapArgs.count("-connect") && mapMultiArgs["-connect"].size() > 0) {
         for (int64_t nLoop = 0;; nLoop++) {
             ProcessOneShot();
-            for (string strAddr : mapMultiArgs["-connect"]) {
+            for (std::string strAddr : mapMultiArgs["-connect"]) {
                 CAddress addr;
                 OpenNetworkConnection(addr, NULL, strAddr.c_str());
                 for (int i = 0; i < 10 && i < nLoop; i++) {
@@ -1351,7 +1348,7 @@ void ThreadOpenConnections() {
         // Only connect out to one peer per network group (/16 for IPv4).
         // Do this here so we don't have to critsect vNodes inside mapAddresses critsect.
         int nOutbound = 0;
-        set <vector<unsigned char>> setConnected;
+        std::set<std::vector<unsigned char> > setConnected;
         {
             LOCK(cs_vNodes);
             for (CNode * pnode : vNodes)
@@ -1408,13 +1405,13 @@ void ThreadOpenAddedConnections() {
 
     if (HaveNameProxy()) {
         while (true) {
-            list <string> lAddresses(0);
+            std::list<std::string> lAddresses(0);
             {
                 LOCK(cs_vAddedNodes);
-                for (string & strAddNode : vAddedNodes)
+                for (std::string& strAddNode : vAddedNodes)
                 lAddresses.push_back(strAddNode);
             }
-            for (string & strAddNode : lAddresses)
+            for (std::string& strAddNode : lAddresses)
             {
                 CAddress addr;
                 CSemaphoreGrant grant(*semOutbound);
@@ -1426,17 +1423,17 @@ void ThreadOpenAddedConnections() {
     }
 
     for (unsigned int i = 0; true; i++) {
-        list <string> lAddresses(0);
+        std::list<std::string> lAddresses(0);
         {
             LOCK(cs_vAddedNodes);
-            for (string & strAddNode : vAddedNodes)
+            for (std::string& strAddNode : vAddedNodes)
             lAddresses.push_back(strAddNode);
         }
 
-        list <vector<CService>> lservAddressesToAdd(0);
-        for (string & strAddNode : lAddresses)
+        std::list<std::vector<CService> > lservAddressesToAdd(0);
+        for (std::string& strAddNode : lAddresses)
         {
-            vector <CService> vservNode(0);
+            std::vector<CService> vservNode(0);
             if (Lookup(strAddNode.c_str(), vservNode, Params().GetDefaultPort(), fNameLookup, 0)) {
                 lservAddressesToAdd.push_back(vservNode);
                 {
@@ -1451,9 +1448,7 @@ void ThreadOpenAddedConnections() {
         {
             LOCK(cs_vNodes);
             for (CNode * pnode : vNodes)
-            for (list < vector < CService > > ::iterator it = lservAddressesToAdd.begin(); it !=
-                                                                                           lservAddressesToAdd.end();
-            it++)
+            for (std::list<std::vector<CService> >::iterator it = lservAddressesToAdd.begin(); it != lservAddressesToAdd.end(); it++)
             for (CService & addrNode : *(it))
             if (pnode->addr == addrNode) {
                 it = lservAddressesToAdd.erase(it);
@@ -1461,7 +1456,7 @@ void ThreadOpenAddedConnections() {
                 break;
             }
         }
-        for (vector < CService > &vserv : lservAddressesToAdd)
+        for (std::vector<CService>& vserv : lservAddressesToAdd)
         {
             CSemaphoreGrant grant(*semOutbound);
             OpenNetworkConnection(CAddress(vserv[i % vserv.size()]), &grant);
@@ -1503,7 +1498,7 @@ void ThreadMessageHandler() {
 
     SetThreadPriority(THREAD_PRIORITY_BELOW_NORMAL);
     while (true) {
-        vector < CNode * > vNodesCopy;
+        std::vector<CNode*> vNodesCopy;
         {
             LOCK(cs_vNodes);
             vNodesCopy = vNodes;
@@ -1564,7 +1559,7 @@ void ThreadMessageHandler() {
     }
 }
 
-bool BindListenPort(const CService &addrBind, string &strError, bool fWhitelisted) {
+bool BindListenPort(const CService& addrBind, std::string& strError, bool fWhitelisted) {
     strError = "";
     int nOne = 1;
 
@@ -1664,7 +1659,7 @@ void static Discover(boost::thread_group &threadGroup) {
     // Get local host IP
     char pszHostName[256] = "";
     if (gethostname(pszHostName, sizeof(pszHostName)) != SOCKET_ERROR) {
-        vector<CNetAddr> vaddr;
+        std::vector<CNetAddr> vaddr;
         if (LookupHost(pszHostName, vaddr, 0, true)) {
             for (const CNetAddr& addr : vaddr) {
                 if (AddLocal(addr, LOCAL_IF))
@@ -1738,7 +1733,7 @@ void StartNode(boost::thread_group &threadGroup, CScheduler &scheduler) {
 
     if (semOutbound == NULL) {
         // initialize semaphore
-        int nMaxOutbound = min(MAX_OUTBOUND_CONNECTIONS, nMaxConnections);
+        int nMaxOutbound = std::min(MAX_OUTBOUND_CONNECTIONS, nMaxConnections);
         semOutbound = new CSemaphore(nMaxOutbound);
     }
 
@@ -1966,8 +1961,8 @@ bool CAddrDB::Write(const CAddrMan &addr) {
     ssPeers << hash;
 
     // open output file, and associate with CAutoFile
-    boost::filesystem::path pathAddr = GetDataDir() / "peers.dat";
-    FILE *file = fopen(pathAddr.string().c_str(), "wb");
+    fs::path pathAddr = GetDataDir() / "peers.dat";
+    FILE* file = fsbridge::fopen(pathAddr, "wb");
     CAutoFile fileout(file, SER_DISK, CLIENT_VERSION);
     if (fileout.IsNull())
         return error("%s : Failed to open file %s", __func__, pathAddr.string());
@@ -1986,13 +1981,13 @@ bool CAddrDB::Write(const CAddrMan &addr) {
 
 bool CAddrDB::Read(CAddrMan &addr) {
     // open input file, and associate with CAutoFile
-    FILE *file = fopen(pathAddr.string().c_str(), "rb");
+    FILE* file = fsbridge::fopen(pathAddr, "rb");
     CAutoFile filein(file, SER_DISK, CLIENT_VERSION);
     if (filein.IsNull())
         return error("%s : Failed to open file %s", __func__, pathAddr.string());
 
     // use file size to size memory buffer
-    uint64_t fileSize = boost::filesystem::file_size(pathAddr);
+    uint64_t fileSize = fs::file_size(pathAddr);
     uint64_t dataSize = fileSize - sizeof(uint256);
     // Don't try to resize to a negative number if file is small
     if (fileSize >= sizeof(uint256))
@@ -2000,7 +1995,7 @@ bool CAddrDB::Read(CAddrMan &addr) {
     else
         return error("%s : Failed to open file %s", __func__, pathAddr.string());
 
-    vector<unsigned char> vchData;
+    std::vector<unsigned char> vchData;
     vchData.resize(dataSize);
     uint256 hashIn;
 
@@ -2224,8 +2219,8 @@ bool CBanDB::Write(const banmap_t &banSet) {
     uint256 hash = Hash(ssBanlist.begin(), ssBanlist.end());
     ssBanlist << hash;
     // open temp output file, and associate with CAutoFile
-    boost::filesystem::path pathTmp = GetDataDir() / tmpfn;
-    FILE *file = fopen(pathTmp.string().c_str(), "wb");
+    fs::path pathTmp = GetDataDir() / tmpfn;
+    FILE *file = fsbridge::fopen(pathTmp, "wb");
     CAutoFile fileout(file, SER_DISK, CLIENT_VERSION);
     if (fileout.IsNull())
         return error("%s: Failed to open file %s", __func__, pathTmp.string());
@@ -2246,17 +2241,17 @@ bool CBanDB::Write(const banmap_t &banSet) {
 
 bool CBanDB::Read(banmap_t &banSet) {
     // open input file, and associate with CAutoFile
-    FILE *file = fopen(pathBanlist.string().c_str(), "rb");
+    FILE *file = fsbridge::fopen(pathBanlist, "rb");
     CAutoFile filein(file, SER_DISK, CLIENT_VERSION);
     if (filein.IsNull())
         return error("%s: Failed to open file %s", __func__, pathBanlist.string());
     // use file size to size memory buffer
-    uint64_t fileSize = boost::filesystem::file_size(pathBanlist);
+    uint64_t fileSize = fs::file_size(pathBanlist);
     uint64_t dataSize = 0;
     // Don't try to resize to a negative number if file is small
     if (fileSize >= sizeof(uint256))
         dataSize = fileSize - sizeof(uint256);
-    vector<unsigned char> vchData;
+    std::vector<unsigned char> vchData;
     vchData.resize(dataSize);
     uint256 hashIn;
     // read data and checksum from file

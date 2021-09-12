@@ -149,7 +149,7 @@ public:
     CAmount getWatchImmatureBalance() const;
     EncryptionStatus getEncryptionStatus() const;
     CKey generateNewKey() const; //for temporary paper wallet key generation
-    bool setAddressBook(const CTxDestination& address, const string& strName, const string& strPurpose);
+    bool setAddressBook(const CTxDestination& address, const std::string& strName, const std::string& strPurpose);
     void encryptKey(const CKey key, const std::string& pwd, const std::string& slt, std::vector<unsigned char>& crypted);
     void decryptKey(const std::vector<unsigned char>& crypted, const std::string& slt, const std::string& pwd, CKey& key);
     void emitBalanceChanged(); // Force update of UI-elements even when no values have changed
@@ -225,7 +225,7 @@ public:
     void unlockCoin(COutPoint& output);
     void listLockedCoins(std::vector<COutPoint>& vOutpts);
 
-    string GetUniqueWalletBackupName();
+    std::string GetUniqueWalletBackupName();
     void loadReceiveRequests(std::vector<std::string>& vReceiveRequests);
     bool saveReceiveRequest(const std::string& sAddress, const int64_t nId, const std::string& sRequest);
 
@@ -304,7 +304,7 @@ public Q_SLOTS:
 namespace WalletUtil
 {
 // get transaction string maps with keys ["date","address", "amount", "id", "type"]
-vector<std::map<QString, QString> > getTXs(CWallet* wallet);
+std::vector<std::map<QString, QString> > getTXs(CWallet* wallet);
 std::map<QString, QString> getTx(CWallet* wallet, uint256 hash);
 std::map<QString, QString> getTx(CWallet* wallet, CWalletTx tx);
 //

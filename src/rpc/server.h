@@ -293,6 +293,11 @@ extern UniValue settxfee(const UniValue& params, bool fHelp);
 extern UniValue getmempoolinfo(const UniValue& params, bool fHelp);
 extern UniValue getrawmempool(const UniValue& params, bool fHelp);
 extern UniValue getblockhash(const UniValue& params, bool fHelp);
+extern UniValue getlastpoablock(const UniValue& params, bool fHelp);
+extern UniValue getlastpoablockhash(const UniValue& params, bool fHelp);
+extern UniValue getlastpoablockheight(const UniValue& params, bool fHelp);
+extern UniValue getlastpoablocktime(const UniValue& params, bool fHelp);
+extern UniValue getlastpoaauditedpos(const UniValue& params, bool fHelp);
 extern UniValue setmaxreorgdepth(const UniValue& params, bool fHelp);
 extern UniValue resyncfrom(const UniValue& params, bool fHelp);
 extern UniValue getblock(const UniValue& params, bool fHelp);
@@ -339,6 +344,7 @@ extern UniValue mnfinalbudget(const UniValue& params, bool fHelp);
 extern UniValue checkbudgets(const UniValue& params, bool fHelp);
 
 extern UniValue getinfo(const UniValue& params, bool fHelp); // in rpcmisc.cpp
+extern UniValue getversion(const UniValue& params, bool fHelp); // in rpcmisc.cpp
 extern UniValue mnsync(const UniValue& params, bool fHelp);
 extern UniValue validateaddress(const UniValue& params, bool fHelp);
 extern UniValue createmultisig(const UniValue& params, bool fHelp);

@@ -142,12 +142,8 @@ BitcoinGUI::BitcoinGUI(const NetworkStyle* networkStyle, QWidget* parent) : QMai
     QString userWindowTitle = QString::fromStdString(GetArg("-windowtitle", ""));
     if (!userWindowTitle.isEmpty()) windowTitle += " - " + userWindowTitle;
     windowTitle += " " + networkStyle->getTitleAddText();
-#ifndef Q_OS_MAC
     QApplication::setWindowIcon(networkStyle->getAppIcon());
     setWindowIcon(networkStyle->getAppIcon());
-#else
-    MacDockIconHandler::instance()->setIcon(networkStyle->getAppIcon());
-#endif
     setWindowTitle(windowTitle);
 
     rpcConsole = new RPCConsole(enableWallet ? this : 0);
@@ -225,6 +221,7 @@ BitcoinGUI::BitcoinGUI(const NetworkStyle* networkStyle, QWidget* parent) : QMai
     connect(openConfEditorAction, SIGNAL(triggered()), rpcConsole, SLOT(showConfEditor()));
     connect(openMNConfEditorAction, SIGNAL(triggered()), rpcConsole, SLOT(showMNConfEditor()));
     connect(showDataDirAction, SIGNAL(triggered()), rpcConsole, SLOT(showDataDir()));
+    connect(showQtDirAction, SIGNAL(triggered()), rpcConsole, SLOT(showQtDir()));
     connect(showBackupsAction, SIGNAL(triggered()), rpcConsole, SLOT(showBackups()));
     connect(labelConnectionsIcon, SIGNAL(clicked()), rpcConsole, SLOT(showPeers()));
     connect(labelEncryptionIcon, SIGNAL(clicked()), walletFrame, SLOT(toggleLockWallet()));
@@ -257,6 +254,7 @@ BitcoinGUI::BitcoinGUI(const NetworkStyle* networkStyle, QWidget* parent) : QMai
         timerStakingIcon->start(10000);
         setStakingStatus();
     }
+    checkForUpdatesClicked();
 }
 
 BitcoinGUI::~BitcoinGUI()
@@ -429,6 +427,9 @@ void BitcoinGUI::createActions(const NetworkStyle* networkStyle)
     showDataDirAction = new QAction(QIcon(":/icons/browse"), tr("Show &PRCYcoin Folder"), this);
     showDataDirAction->setStatusTip(tr("Show the PRCYcoin folder"));
     showDataDirAction->setShortcut(Qt::Key_F2);
+    showQtDirAction = new QAction(QIcon(":/icons/browse"), tr("Show &Qt Folder"), this);
+    showQtDirAction->setStatusTip(tr("Show the Qt folder"));
+    showQtDirAction->setShortcut(Qt::Key_F3);
     showBackupsAction = new QAction(QIcon(":/icons/browse"), tr("Show Automatic &Backups"), this);
     showBackupsAction->setStatusTip(tr("Show automatically created wallet backups"));
 
@@ -478,6 +479,8 @@ void BitcoinGUI::createActions(const NetworkStyle* networkStyle)
     openBridgeAction->setStatusTip(tr("Bridge Link"));
     openDexAction = new QAction(QApplication::style()->standardIcon(QStyle::SP_MessageBoxInformation), tr("&PRivaCY DEX"), this);
     openDexAction->setStatusTip(tr("PRivaCY Dex Link"));
+    openCheckerAction = new QAction(QApplication::style()->standardIcon(QStyle::SP_MessageBoxInformation), tr("&PRCY Checker"), this);
+    openCheckerAction->setStatusTip(tr("PRCY Checker Link"));
     openTGTechSupportAction = new QAction(QIcon(":/icons/telegram"), tr("&Telegram Tech Support"), this);
     openTGTechSupportAction->setStatusTip(tr("Telegram Tech Support"));
     openTGMNSupportAction = new QAction(QIcon(":/icons/telegram"), tr("&Telegram Masternode Support"), this);
@@ -499,6 +502,7 @@ void BitcoinGUI::createActions(const NetworkStyle* networkStyle)
     connect(openBootStrapAction, SIGNAL(triggered()), this, SLOT(openBootStrapClicked()));
     connect(openBridgeAction, SIGNAL(triggered()), this, SLOT(openBridgeClicked()));
     connect(openDexAction, SIGNAL(triggered()), this, SLOT(openDexClicked()));
+    connect(openCheckerAction, SIGNAL(triggered()), this, SLOT(openCheckerClicked()));
     connect(openTGTechSupportAction, SIGNAL(triggered()), this, SLOT(openTGTechSupportClicked()));
     connect(openTGMNSupportAction, SIGNAL(triggered()), this, SLOT(openTGMNSupportClicked()));
     connect(openDiscordSupportAction, SIGNAL(triggered()), this, SLOT(openDiscordSupportClicked()));
@@ -575,6 +579,7 @@ void BitcoinGUI::createMenuBar()
         tools->addAction(openConfEditorAction);
         tools->addAction(openMNConfEditorAction);
         tools->addAction(showDataDirAction);
+        tools->addAction(showQtDirAction);
         tools->addAction(showBackupsAction);
         tools->addAction(openBlockExplorerAction);
     }
@@ -600,6 +605,7 @@ void BitcoinGUI::createMenuBar()
     help->addAction(openBootStrapAction);
     help->addAction(openBridgeAction);
     help->addAction(openDexAction);
+    help->addAction(openCheckerAction);
     help->addSeparator();
     help->addAction(openTGTechSupportAction);
     //help->addAction(openTGMNSupportAction);
@@ -789,7 +795,7 @@ void BitcoinGUI::createTrayIcon(const NetworkStyle* networkStyle)
 void BitcoinGUI::createTrayIconMenu()
 {
 #ifndef Q_OS_MAC
-    // return if trayIcon is unset (only on non-Mac OSes)
+    // return if trayIcon is unset (only on non-macOSes)
     if (!trayIcon)
         return;
 
@@ -799,13 +805,15 @@ void BitcoinGUI::createTrayIconMenu()
     connect(trayIcon, SIGNAL(activated(QSystemTrayIcon::ActivationReason)),
         this, SLOT(trayIconActivated(QSystemTrayIcon::ActivationReason)));
 #else
-    // Note: On Mac, the dock icon is used to provide the tray's functionality.
+    // Note: On macOS, the Dock icon is used to provide the tray's functionality.
     MacDockIconHandler* dockIconHandler = MacDockIconHandler::instance();
-    dockIconHandler->setMainWindow((QMainWindow*)this);
-    trayIconMenu = dockIconHandler->dockMenu();
+    connect(dockIconHandler, &MacDockIconHandler::dockIconClicked, this, &BitcoinGUI::macosDockIconActivated);
+
+    trayIconMenu = new QMenu(this);
+    trayIconMenu->setAsDockMenu();
 #endif
 
-    // Configuration of the tray icon (or dock icon) icon menu
+    // Configuration of the tray icon (or Dock icon) icon menu
     trayIconMenu->addAction(toggleHideAction);
     trayIconMenu->addSeparator();
     trayIconMenu->addAction(sendCoinsAction);
@@ -826,9 +834,10 @@ void BitcoinGUI::createTrayIconMenu()
     trayIconMenu->addAction(openConfEditorAction);
     trayIconMenu->addAction(openMNConfEditorAction);
     trayIconMenu->addAction(showDataDirAction);
+    trayIconMenu->addAction(showQtDirAction);
     trayIconMenu->addAction(showBackupsAction);
     trayIconMenu->addAction(openBlockExplorerAction);
-#ifndef Q_OS_MAC // This is built-in on Mac
+#ifndef Q_OS_MAC // This is built-in on macOS
     trayIconMenu->addSeparator();
     trayIconMenu->addAction(quitAction);
 #endif
@@ -842,6 +851,12 @@ void BitcoinGUI::trayIconActivated(QSystemTrayIcon::ActivationReason reason)
         toggleHidden();
     }
 }
+#else
+void BitcoinGUI::macosDockIconActivated()
+ {
+     show();
+     activateWindow();
+ }
 #endif
 
 void BitcoinGUI::optionsClicked()
@@ -952,6 +967,11 @@ void BitcoinGUI::openDexClicked()
     QDesktopServices::openUrl(QUrl("https://privacydex.io"));
 }
 
+void BitcoinGUI::openCheckerClicked()
+{
+    QDesktopServices::openUrl(QUrl("https://prcycoin.com/prcy-checker"));
+}
+
 void BitcoinGUI::checkForUpdatesClicked()
 {
     QUrl serviceUrl = QUrl("https://raw.githubusercontent.com/PRCYCoin/PRCYCoin/master/version.txt");
@@ -977,12 +997,14 @@ void BitcoinGUI::serviceRequestFinished(QNetworkReply* reply)
                 return;
             }
         } else {
-            QMessageBox msgBox;
-            msgBox.setWindowTitle("No Update Available");
-            msgBox.setText("No update available.\n\nYour wallet is up to date.");
-            msgBox.setStyleSheet(GUIUtil::loadStyleSheet());
-            msgBox.setIcon(QMessageBox::Information);
-            msgBox.exec();
+            if (!isStartup) {
+                QMessageBox msgBox;
+                msgBox.setWindowTitle("No Update Available");
+                msgBox.setText("No update available.\n\nYour wallet is up to date.");
+                msgBox.setStyleSheet(GUIUtil::loadStyleSheet());
+                msgBox.setIcon(QMessageBox::Information);
+                msgBox.exec();
+            }
         }
     } else {
         QByteArray error = reply->readAll();
@@ -993,6 +1015,7 @@ void BitcoinGUI::serviceRequestFinished(QNetworkReply* reply)
         msgBox.setIcon(QMessageBox::Critical);
         msgBox.exec();
     }
+    isStartup = false;
 }
 
 #ifdef ENABLE_WALLET
@@ -1444,18 +1467,11 @@ void BitcoinGUI::showNormalIfMinimized(bool fToggleHidden)
     if (!clientModel)
         return;
 
-    // activateWindow() (sometimes) helps with keyboard focus on Windows
-    if (isHidden()) {
-        show();
-        activateWindow();
-    } else if (isMinimized()) {
-        showNormal();
-        activateWindow();
-    } else if (GUIUtil::isObscured(this)) {
-        raise();
-        activateWindow();
-    } else if (fToggleHidden)
+    if (!isHidden() && !isMinimized() && !GUIUtil::isObscured(this) && fToggleHidden) {
         hide();
+    } else {
+        GUIUtil::bringToFront(this);
+    }
 }
 
 void BitcoinGUI::toggleHidden()

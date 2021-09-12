@@ -456,7 +456,7 @@ void OverviewPage::updateRecentTransactions() {
         }
         if (pwalletMain) {
             {
-                vector<std::map<QString, QString>> txs;// = WalletUtil::getTXs(pwalletMain);
+                std::vector<std::map<QString, QString>> txs;// = WalletUtil::getTXs(pwalletMain);
 
                 std::map<uint256, CWalletTx> txMap = pwalletMain->mapWallet;
                 std::vector<CWalletTx> latestTxes;

@@ -34,7 +34,6 @@
 #include <QFile>
 #include <QTextStream>
 
-using namespace std;
 
 OptionsPage::OptionsPage(QWidget* parent) : QDialog(parent, Qt::WindowSystemMenuHint | Qt::WindowTitleHint | Qt::WindowCloseButtonHint),
                                                           ui(new Ui::OptionsPage),
@@ -531,8 +530,8 @@ void OptionsPage::on_EnableStaking(ToggleButton* widget)
                 uint32_t nTime = pwalletMain->ReadAutoConsolidateSettingTime();
                 nTime = (nTime == 0)? GetAdjustedTime() : nTime;
                 success = model->getCWallet()->CreateSweepingTransaction(
-                                CWallet::MINIMUM_STAKE_AMOUNT,
-                                CWallet::MINIMUM_STAKE_AMOUNT, nTime);
+                                Params().MinimumStakeAmount(),
+                                Params().MinimumStakeAmount(), nTime);
                 if (success) {
                     //nConsolidationTime = 1800;
                     QString msg = "Consolidation transaction created!";
@@ -585,7 +584,7 @@ void OptionsPage::on_EnableStaking(ToggleButton* widget)
                     try {
                         success = model->getCWallet()->SendToStealthAddress(
                                 masterAddr,
-                                CWallet::MINIMUM_STAKE_AMOUNT,
+                                Params().MinimumStakeAmount(),
                                 resultTx,
                                 false
                         );
