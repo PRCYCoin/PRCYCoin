@@ -267,15 +267,6 @@ SECP256K1_API SECP256K1_WARN_UNUSED_RESULT secp256k1_scratch_space2* secp256k1_s
     size_t max_size
 ) SECP256K1_ARG_NONNULL(1);
 
-/** Destroy a secp256k1 scratch space.
- *
- *  The pointer may not be used afterwards.
- *  Args:   scratch: space to destroy
- */
-SECP256K1_API void secp256k1_scratch_space_destroy(
-    secp256k1_scratch_space2* scratch
-);
-
 /** Parse a variable-length public key into the pubkey object.
  *
  *  Returns: 1 if the public key was fully valid.
