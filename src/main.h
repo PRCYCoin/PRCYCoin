@@ -45,7 +45,7 @@
 #include "secp256k1_bulletproofs.h"
 #include "secp256k1_commitment.h"
 #include "secp256k1_generator.h"
-#include "secp256k1_2.h"
+#include "secp256k1.h"
 #include "secp256k1-mw/src/hash_impl.h"
 
 class CBlockIndex;
