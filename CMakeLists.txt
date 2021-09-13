@@ -2,9 +2,10 @@ cmake_minimum_required(VERSION 3.10)
 project(PRCY)
 
 set(BDB_VER "4.8.30")
+set(OPENSSL_VER "1.0.1k")
 set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/contrib/cmake")
 set(CMAKE_CXX_STANDARD 11)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 ")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14 ")
 include(${CMAKE_ROOT}/Modules/ExternalProject.cmake)
 
 if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
@@ -16,6 +17,8 @@ if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
     set(ENV{CPPFLAGS} "-I${OPENSSL_ROOT_DIR}/include")
     set(ENV{LDFLAGS} "-L${OPENSSL_ROOT_DIR}/lib")
     set(BerkeleyDB_ROOT_DIR "/usr/local/Cellar/berkeley-db@4/${BDB_VER}/")
+    set(Boost_USE_MULTITHREADED ON)
+    set(Boost_NO_BOOST_CMAKE ON)
 elseif(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
     file(READ "/proc/version" _SYS_VERSION)
     string(REGEX MATCH "Microsoft" _SYSTEM_VERSION_PARSED "${_SYS_VERSION}")
@@ -42,7 +45,7 @@ elseif(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
         set(Qt5core_DIR "/usr/lib/x86_64-linux-gnu/cmake/Qt5/QtCore")
         include_directories("/usr/include")
         include_directories("/usr/include/x86_64-linux-gnu")
-        add_definitions("-D__BYTE_ORDER -D__LITTLE_ENDIAN")
+        add_definitions("-D__BYTE_ORDER -D__LITTLE_ENDIAN -D__GLIBC__ -DHAVE_DECL_BSWAP_16=0 -DHAVE_DECL_BSWAP_32=0 -DHAVE_DECL_BSWAP_64=0")
     endif()
 endif()
 
@@ -69,15 +72,6 @@ if (LibEvent_FOUND)
     link_directories ( ${LibEvent_LIBRARY_DIRS} )
 endif()
 
-find_package(GMP)
-if (GMP_FOUND)
-    include_directories ( ${GMP_INCLUDE_DIR} )
-    link_directories ( ${GMP_LIBRARY_DIRS} )
-else()
-    message(WARNING "GMP not found, falling back to OpenSSL for bignum!")
-    set(BIGNUM_CONFIGURE_FLAGS "--with-zerocoin-bignum=openssl")
-endif()
-
 find_package(ZMQ)
 if (ZMQ_Found)
     include_directories ( ${ZMQ_INCLUDE_DIR} )
@@ -101,9 +95,16 @@ endif()
 if (EXISTS	"${CMAKE_CURRENT_SOURCE_DIR}/src/config/prcycoin-config.h")
 else()
     execute_process(
-            COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/configure ${BDB_CONFIGURE_FLAGS} ${BIGNUM_CONFIGURE_FLAGS}
+            COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/configure ${BDB_CONFIGURE_FLAGS}
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
     )
+endif()
+# error out if configure fails
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/config/pivx-config.h")
+else()
+    execute_process(COMMAND cat config.log WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+    message(FATAL_ERROR "configure script didn't finish properly see config.log output above")
+
 endif()
 add_definitions(-DHAVE_CONFIG_H)
 
@@ -313,7 +314,7 @@ set(SERVER_SOURCES
         ./src/httprpc.cpp
         ./src/httpserver.cpp
         ./src/init.cpp
-        ./src/leveldbwrapper.cpp
+        ./src/dbwrapper.cpp
         ./src/main.cpp
         ./src/merkleblock.cpp
         ./src/miner.cpp
@@ -475,9 +476,6 @@ target_link_libraries(prcycoin-tx
         secp256k1-mw
         ${Boost_LIBRARIES} ${OPENSSL_LIBRARIES} ${LIBEVENT_LIB}
         )
-if(GMP_FOUND)
-    target_link_libraries(prcycoin-tx ${GMP_LIBRARY})
-endif()
 
 add_executable(prcycoind ${CMAKE_CURRENT_SOURCE_DIR}/src/prcycoind.cpp)
 add_dependencies(prcycoind libunivalue libsecp256k1 libsecp256k1-mw leveldb leveldb_sse42 memenv)
@@ -491,9 +489,6 @@ target_link_libraries(prcycoind
         leveldb leveldb_sse42 memenv secp256k1 secp256k1-mw
         ${BerkeleyDB_LIBRARIES} ${OPENSSL_LIBRARIES} ${Boost_LIBRARIES} ${LIBEVENT_LIB} miniupnpc pthread
         )
-if(GMP_FOUND)
-    target_link_libraries(prcycoind ${GMP_LIBRARY})
-endif()
 if(ZMQ_FOUND)
     target_link_libraries(prcycoind ZMQ_A ${ZMQ_LIB})
 endif ()
