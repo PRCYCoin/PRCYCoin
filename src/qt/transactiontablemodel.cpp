@@ -139,7 +139,7 @@ public:
                                                        std::vector<CWalletTx>(walletTxes.end() - remainingSize, walletTxes.end())
                                                        ));
 
-                for (QFuture<QList<TransactionRecord>> &future : tasks) {
+                for (auto &future : tasks) {
                     future.waitForFinished();
                     cachedWallet.append(future.result());
                 }
