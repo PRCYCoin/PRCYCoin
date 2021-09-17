@@ -33,7 +33,7 @@ QT_TRANSLATE_NOOP("prcycoin-core", ""
 "Cannot obtain a lock on data directory %s. PRCY is probably already running."),
 QT_TRANSLATE_NOOP("prcycoin-core", ""
 "Change automatic finalized budget voting behavior. mode=auto: Vote for only "
-"exact finalized budget match to my generated budget. (std::string, default: auto)"),
+"exact finalized budget match to my generated budget. (string, default: auto)"),
 QT_TRANSLATE_NOOP("prcycoin-core", ""
 "Connect only to the specified node(s); -noconnect or -connect=0 alone to "
 "disable automatic connections"),
@@ -76,10 +76,10 @@ QT_TRANSLATE_NOOP("prcycoin-core", ""
 "Execute command when the best block changes and its size is over (%s in cmd "
 "is replaced by block hash, %d with the block size)"),
 QT_TRANSLATE_NOOP("prcycoin-core", ""
-"Fees (in PRCY/Kb) smaller than this are considered zero fee for relaying "
+"Fees (in %s/Kb) smaller than this are considered zero fee for relaying "
 "(default: %s)"),
 QT_TRANSLATE_NOOP("prcycoin-core", ""
-"Fees (in PRCY/Kb) smaller than this are considered zero fee for transaction "
+"Fees (in %s/Kb) smaller than this are considered zero fee for transaction "
 "creation (default: %s)"),
 QT_TRANSLATE_NOOP("prcycoin-core", ""
 "Flush database activity from memory pool to disk log every <n> megabytes "
@@ -137,6 +137,10 @@ QT_TRANSLATE_NOOP("prcycoin-core", ""
 QT_TRANSLATE_NOOP("prcycoin-core", ""
 "Show N confirmations for a successfully locked transaction (0-9999, default: "
 "%u)"),
+QT_TRANSLATE_NOOP("prcycoin-core", ""
+"Specify custom backup path to add a copy of any wallet backup. If set as "
+"dir, every backup generates a timestamped file. If set as file, will rewrite "
+"to that file every backup."),
 QT_TRANSLATE_NOOP("prcycoin-core", ""
 "Support filtering of blocks and transaction with bloom filters (default: %u)"),
 QT_TRANSLATE_NOOP("prcycoin-core", ""
@@ -240,6 +244,7 @@ QT_TRANSLATE_NOOP("prcycoin-core", "Copyright (C) 2009-%i The Bitcoin Core Devel
 QT_TRANSLATE_NOOP("prcycoin-core", "Copyright (C) 2014-%i The Dash Core Developers"),
 QT_TRANSLATE_NOOP("prcycoin-core", "Copyright (C) 2015-%i The PIVX Core Developers"),
 QT_TRANSLATE_NOOP("prcycoin-core", "Copyright (C) 2018-%i The DAPS Project developers"),
+QT_TRANSLATE_NOOP("prcycoin-core", "Copyright (C) 2020-%i The PRCY developers"),
 QT_TRANSLATE_NOOP("prcycoin-core", "Corrupted block database detected"),
 QT_TRANSLATE_NOOP("prcycoin-core", "Could not parse masternode.conf"),
 QT_TRANSLATE_NOOP("prcycoin-core", "Currently the Number of supported recipients must be 1"),
@@ -283,7 +288,7 @@ QT_TRANSLATE_NOOP("prcycoin-core", "Failed to generate bulletproof"),
 QT_TRANSLATE_NOOP("prcycoin-core", "Failed to listen on any port. Use -listen=0 if you want this."),
 QT_TRANSLATE_NOOP("prcycoin-core", "Failed to parse host:port string"),
 QT_TRANSLATE_NOOP("prcycoin-core", "Failed to read block"),
-QT_TRANSLATE_NOOP("prcycoin-core", "Fee (in PRCY/kB) to add to transactions you send (default: %s)"),
+QT_TRANSLATE_NOOP("prcycoin-core", "Fee (in %s/kB) to add to transactions you send (default: %s)"),
 QT_TRANSLATE_NOOP("prcycoin-core", "Force safe mode (default: %u)"),
 QT_TRANSLATE_NOOP("prcycoin-core", "Generate coins (default: %u)"),
 QT_TRANSLATE_NOOP("prcycoin-core", "How many blocks to check at startup (default: %u, 0 = all)"),
@@ -337,8 +342,7 @@ QT_TRANSLATE_NOOP("prcycoin-core", "Randomly drop 1 of every <n> network message
 QT_TRANSLATE_NOOP("prcycoin-core", "Randomly fuzz 1 of every <n> network messages"),
 QT_TRANSLATE_NOOP("prcycoin-core", "Rebuild block chain index from current blk000??.dat files"),
 QT_TRANSLATE_NOOP("prcycoin-core", "Recalculating PRCY supply..."),
-QT_TRANSLATE_NOOP("prcycoin-core", "Reindex the PRCY money supply statistics"),
-QT_TRANSLATE_NOOP("prcycoin-core", "Reindex the accumulator database"),
+QT_TRANSLATE_NOOP("prcycoin-core", "Reindex the %s money supply statistics"),
 QT_TRANSLATE_NOOP("prcycoin-core", "Relay and mine data carrier transactions (default: %u)"),
 QT_TRANSLATE_NOOP("prcycoin-core", "Relay non-P2SH multisig (default: %u)"),
 QT_TRANSLATE_NOOP("prcycoin-core", "Rescan the block chain for missing wallet transactions"),

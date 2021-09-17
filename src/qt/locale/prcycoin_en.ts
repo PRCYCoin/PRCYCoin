@@ -190,7 +190,12 @@
         <translation>Enter the old and new passphrase to the wallet.</translation>
     </message>
     <message>
-        <location line="+61"/>
+        <location line="+53"/>
+        <source>Warning: If you encrypt your wallet and lose your passphrase, you will &lt;b&gt;LOSE ALL OF YOUR COINS&lt;/b&gt;!</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+8"/>
         <source>PRCY will close now to finish the encryption process. Remember that encrypting your wallet cannot fully protect your PRCYs from being stolen by malware infecting your computer.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -230,12 +235,7 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Warning: If you encrypt your wallet and lose your passphrase, you will &lt;b&gt;LOSE ALL OF YOUR PRCY&lt;/b&gt;!</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+6"/>
+        <location line="+7"/>
         <source>Wallet Encrypted</source>
         <translation type="unfinished"></translation>
     </message>
@@ -481,7 +481,7 @@
         <translation>Node</translation>
     </message>
     <message>
-        <location line="+146"/>
+        <location line="+144"/>
         <source>&amp;Overview</source>
         <translation>&amp;Overview</translation>
     </message>
@@ -516,7 +516,7 @@
         <translation>Show information about Qt</translation>
     </message>
     <message>
-        <location line="+25"/>
+        <location line="+30"/>
         <source>&amp;Show / Hide</source>
         <translation>&amp;Show / Hide</translation>
     </message>
@@ -627,6 +627,16 @@
     </message>
     <message>
         <location line="+2"/>
+        <source>Show &amp;Qt Folder</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Show the Qt folder</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
         <source>Show Automatic &amp;Backups</source>
         <translation>Show Automatic &amp;Backups</translation>
     </message>
@@ -660,8 +670,58 @@
         <source>Open &amp;URI...</source>
         <translation>Open &amp;URI...</translation>
     </message>
+    <message>
+        <location line="+31"/>
+        <source>&amp;GitHub Wiki</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>GitHub Wiki</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>&amp;Blockchain Explorer API</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Blockchain Explorer API</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>&amp;Bridge</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Bridge Link</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>&amp;PRivaCY DEX</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>PRivaCY Dex Link</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>&amp;PRCY Checker</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>PRCY Checker Link</source>
+        <translation type="unfinished"></translation>
+    </message>
     <message numerus="yes">
-        <location line="+617"/>
+        <location line="+629"/>
         <source>%n Active Connections</source>
         <translation type="unfinished">
             <numerusform></numerusform>
@@ -708,17 +768,17 @@ Confirmations: %5
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-812"/>
+        <location line="-854"/>
         <source>&amp;File</source>
         <translation>&amp;File</translation>
     </message>
     <message>
-        <location line="-160"/>
+        <location line="-180"/>
         <source>&amp;Settings</source>
         <translation>&amp;Settings</translation>
     </message>
     <message>
-        <location line="-241"/>
+        <location line="-239"/>
         <source>PRCY Coin</source>
         <translation type="unfinished"></translation>
     </message>
@@ -728,7 +788,7 @@ Confirmations: %5
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+182"/>
+        <location line="+180"/>
         <source>&amp;History</source>
         <translation type="unfinished"></translation>
     </message>
@@ -743,7 +803,7 @@ Confirmations: %5
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="+11"/>
         <source>&amp;Staking</source>
         <translation type="unfinished"></translation>
     </message>
@@ -768,37 +828,37 @@ Confirmations: %5
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+23"/>
+        <location line="+26"/>
         <source>&amp;Blockchain Explorer</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+117"/>
+        <location line="+129"/>
         <source>&amp;Tools</source>
         <translation>&amp;Tools</translation>
     </message>
     <message>
-        <location line="+25"/>
+        <location line="+26"/>
         <source>&amp;Help</source>
         <translation>&amp;Help</translation>
     </message>
     <message>
-        <location line="+570"/>
+        <location line="+611"/>
         <source>PRCY</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-820"/>
+        <location line="-882"/>
         <source>&amp;Masternodes</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-189"/>
+        <location line="-187"/>
         <source> - Lite Mode</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+221"/>
+        <location line="+219"/>
         <source>&amp;About PRCY</source>
         <translation type="unfinished"></translation>
     </message>
@@ -808,7 +868,7 @@ Confirmations: %5
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+41"/>
+        <location line="+46"/>
         <source>&amp;MultiSend</source>
         <translation type="unfinished"></translation>
     </message>
@@ -833,7 +893,7 @@ Confirmations: %5
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+17"/>
         <source>Open a PRCY: URI or payment request</source>
         <translation type="unfinished"></translation>
     </message>
@@ -953,17 +1013,7 @@ Confirmations: %5
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>&amp;Blockhain Explorer API</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Blockhain Explorer API</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="+5"/>
         <source>&amp;BootStrap</source>
         <translation type="unfinished"></translation>
     </message>
@@ -973,7 +1023,7 @@ Confirmations: %5
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+7"/>
         <source>&amp;Telegram Tech Support</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1013,17 +1063,17 @@ Confirmations: %5
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+91"/>
+        <location line="+96"/>
         <source>Social</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+195"/>
+        <location line="+199"/>
         <source>PRCY client</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+313"/>
+        <location line="+350"/>
         <source>Up to date</source>
         <translation>Up to date</translation>
     </message>
@@ -1158,6 +1208,11 @@ Confirmations: %5
         <location line="+10"/>
         <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;locked&lt;/b&gt;</source>
         <translation>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;locked&lt;/b&gt;</translation>
+    </message>
+    <message>
+        <location filename="../prcycoin.cpp" line="+549"/>
+        <source>A fatal error occurred. PRCY can no longer continue safely and will quit.</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -1319,7 +1374,7 @@ Confirmations: %5
         <translation>Priority</translation>
     </message>
     <message>
-        <location filename="../coincontroldialog.cpp" line="+57"/>
+        <location filename="../coincontroldialog.cpp" line="+56"/>
         <source>Copy address</source>
         <translation>Copy address</translation>
     </message>
@@ -1658,7 +1713,7 @@ lowercase letters, numbers, symbols) </source>
 <context>
     <name>FreespaceChecker</name>
     <message>
-        <location filename="../intro.cpp" line="+71"/>
+        <location filename="../intro.cpp" line="+69"/>
         <source>A new data directory will be created.</source>
         <translation>A new data directory will be created.</translation>
     </message>
@@ -1761,34 +1816,47 @@ lowercase letters, numbers, symbols) </source>
     </message>
     <message>
         <location line="+27"/>
-        <location filename="../historypage.cpp" line="+294"/>
+        <location filename="../historypage.cpp" line="+291"/>
         <source>All Types</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location line="+5"/>
+        <location filename="../historypage.cpp" line="+3"/>
+        <location line="+1"/>
+        <location line="+9"/>
         <source>Sent</source>
         <translation type="unfinished">Sent</translation>
     </message>
     <message>
         <location line="+5"/>
-        <location filename="../historypage.cpp" line="+1"/>
+        <location filename="../historypage.cpp" line="-12"/>
         <location line="+1"/>
+        <location line="+11"/>
         <source>Received</source>
         <translation type="unfinished">Received</translation>
     </message>
     <message>
         <location line="+5"/>
+        <location filename="../historypage.cpp" line="-8"/>
+        <location line="+1"/>
+        <location line="+7"/>
         <source>Mined</source>
         <translation type="unfinished">Mined</translation>
     </message>
     <message>
+        <location line="+5"/>
+        <location filename="../historypage.cpp" line="-6"/>
+        <location line="+1"/>
         <location line="+5"/>
         <source>Minted</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location line="+5"/>
+        <location filename="../historypage.cpp" line="-4"/>
+        <location line="+1"/>
+        <location line="+3"/>
         <source>Masternode</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1822,16 +1890,6 @@ lowercase letters, numbers, symbols) </source>
         <source>Confirmations</source>
         <translation type="unfinished">Confirmations</translation>
     </message>
-    <message>
-        <location filename="../historypage.cpp" line="+0"/>
-        <source>Masternode Reward</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Staking Reward</source>
-        <translation type="unfinished"></translation>
-    </message>
 </context>
 <context>
     <name>ImportOrCreate</name>
@@ -1858,6 +1916,16 @@ lowercase letters, numbers, symbols) </source>
     <message>
         <location line="+20"/>
         <source>Next</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../importorcreate.cpp" line="+40"/>
+        <source>Copy</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>OK</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -1894,7 +1962,7 @@ lowercase letters, numbers, symbols) </source>
         <translation>Use a custom data directory:</translation>
     </message>
     <message>
-        <location filename="../intro.cpp" line="+77"/>
+        <location filename="../intro.cpp" line="+76"/>
         <source>PRCY</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2143,7 +2211,7 @@ MultiSend will not be activated unless you have clicked Activate</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../multisenddialog.cpp" line="+94"/>
+        <location filename="../multisenddialog.cpp" line="+92"/>
         <source>The entered address:
 </source>
         <translation type="unfinished"></translation>
@@ -2532,24 +2600,24 @@ https://www.transifex.com/prcycoin-project/prcycoin-project-translations</source
     </message>
     <message>
         <location line="+6"/>
-        <location line="+93"/>
+        <location line="+150"/>
         <source>On</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-90"/>
-        <location line="+93"/>
+        <location line="-147"/>
+        <location line="+150"/>
         <source>Off</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-115"/>
+        <location line="-172"/>
         <source>Staking Mode:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location line="+48"/>
-        <location filename="../optionspage.cpp" line="+354"/>
+        <location filename="../optionspage.cpp" line="+366"/>
         <source>Backup Wallet</source>
         <translation type="unfinished">Backup Wallet</translation>
     </message>
@@ -2559,7 +2627,47 @@ https://www.transifex.com/prcycoin-project/prcycoin-project-translations</source
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+174"/>
+        <location line="+23"/>
+        <source>Theme Selection:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+19"/>
+        <source>Switch between Dark and Web Wallet theme</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Dark</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Web</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+68"/>
+        <source>Number of digits to use:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>6</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>8</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Request authentication code before sending any transactions</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+121"/>
         <source>Change current passphrase</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2644,12 +2752,12 @@ https://www.transifex.com/prcycoin-project/prcycoin-project-translations</source
         <translation type="unfinished">M&amp;inimize on close</translation>
     </message>
     <message>
-        <location line="-373"/>
+        <location line="-408"/>
         <source>Two Factor Authentication</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+30"/>
+        <location line="+65"/>
         <source>Remember my authentication code for</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2679,8 +2787,13 @@ https://www.transifex.com/prcycoin-project/prcycoin-project-translations</source
         <translation type="unfinished">Wallet Data (*.dat)</translation>
     </message>
     <message>
-        <location line="+506"/>
+        <location line="+521"/>
         <source>Copy</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>OK</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -2767,7 +2880,7 @@ https://www.transifex.com/prcycoin-project/prcycoin-project-translations</source
 <context>
     <name>PaymentServer</name>
     <message>
-        <location filename="../paymentserver.cpp" line="+293"/>
+        <location filename="../paymentserver.cpp" line="+290"/>
         <location line="+184"/>
         <location line="+33"/>
         <location line="+104"/>
@@ -2916,12 +3029,12 @@ https://www.transifex.com/prcycoin-project/prcycoin-project-translations</source
 <context>
     <name>QObject</name>
     <message>
-        <location filename="../bitcoinunits.cpp" line="+253"/>
+        <location filename="../bitcoinunits.cpp" line="+255"/>
         <source>Amount</source>
         <translation>Amount</translation>
     </message>
     <message>
-        <location filename="../guiutil.cpp" line="+921"/>
+        <location filename="../guiutil.cpp" line="+962"/>
         <source>%1 d</source>
         <translation>%1 d</translation>
     </message>
@@ -2990,6 +3103,39 @@ https://www.transifex.com/prcycoin-project/prcycoin-project-translations</source
         <location line="+2"/>
         <source>%1 GB</source>
         <translation type="unfinished">%1 GB</translation>
+    </message>
+    <message>
+        <location filename="../prcycoin.cpp" line="+97"/>
+        <location line="+7"/>
+        <location line="+13"/>
+        <location line="+19"/>
+        <source>PRCY</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-38"/>
+        <source>Error: Specified data directory &quot;%1&quot; does not exist.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Error: Cannot parse configuration file: %1. Only use key=value syntax.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Error: Invalid combination of -regtest and -testnet.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+20"/>
+        <source>Error reading masternode configuration file: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+43"/>
+        <source>PRCY didn&apos;t yet exit safely...</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -3195,7 +3341,7 @@ https://www.transifex.com/prcycoin-project/prcycoin-project-translations</source
     <message>
         <location line="+59"/>
         <location filename="../rpcconsole.cpp" line="+304"/>
-        <location line="+737"/>
+        <location line="+742"/>
         <source>Select a peer to view detailed information.</source>
         <translation>Select a peer to view detailed information.</translation>
     </message>
@@ -3395,7 +3541,7 @@ https://www.transifex.com/prcycoin-project/prcycoin-project-translations</source
         <translation>Rebuild index</translation>
     </message>
     <message>
-        <location filename="../rpcconsole.cpp" line="-381"/>
+        <location filename="../rpcconsole.cpp" line="-386"/>
         <source>In:</source>
         <translation>In:</translation>
     </message>
@@ -3766,6 +3912,16 @@ https://www.transifex.com/prcycoin-project/prcycoin-project-translations</source
     </message>
     <message>
         <location line="+30"/>
+        <source>Copy Transaction Amount to clipboard</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Amount</source>
+        <translation type="unfinished">Amount</translation>
+    </message>
+    <message>
+        <location line="+30"/>
         <source>Copy Transaction Fee to clipboard</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3948,7 +4104,7 @@ https://www.transifex.com/prcycoin-project/prcycoin-project-translations</source
         <translation type="unfinished">Copy change</translation>
     </message>
     <message>
-        <location line="+139"/>
+        <location line="+152"/>
         <source>Destination</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3964,11 +4120,11 @@ https://www.transifex.com/prcycoin-project/prcycoin-project-translations</source
     </message>
     <message>
         <location line="+8"/>
-        <source>&lt;span class=&apos;h3&apos;&gt;Total Amount = &lt;b&gt;%1&lt;/b&gt;&lt;br/&gt;&lt;hr /&gt;&lt;/center&gt;</source>
+        <source>&lt;span class=&apos;h3&apos;&gt;Total Amount = &lt;b&gt;%1&lt;/b&gt;&lt;br/&gt;&lt;/center&gt;</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+8"/>
         <source>Confirm Send Coins</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4285,7 +4441,12 @@ https://www.transifex.com/prcycoin-project/prcycoin-project-translations</source
     </message>
     <message>
         <location line="+1"/>
-        <source>The PRCY Project developers</source>
+        <source>The DAPS Project developers</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The PRCY developers</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -4305,7 +4466,7 @@ https://www.transifex.com/prcycoin-project/prcycoin-project-translations</source
 <context>
     <name>TransactionDesc</name>
     <message numerus="yes">
-        <location filename="../transactiondesc.cpp" line="+34"/>
+        <location filename="../transactiondesc.cpp" line="+33"/>
         <source>Open for %n more block(s)</source>
         <translation>
             <numerusform>Open for %n more block</numerusform>
@@ -4948,7 +5109,7 @@ https://www.transifex.com/prcycoin-project/prcycoin-project-translations</source
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+201"/>
+        <location line="+257"/>
         <source>Confirm</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4968,7 +5129,7 @@ https://www.transifex.com/prcycoin-project/prcycoin-project-translations</source
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../2faconfirmdialog.cpp" line="+123"/>
+        <location filename="../2faconfirmdialog.cpp" line="+169"/>
         <source>Wrong 2FA Code</source>
         <translation type="unfinished"></translation>
     </message>
@@ -5002,7 +5163,7 @@ Please try again.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+201"/>
+        <location line="+257"/>
         <source>Confirm</source>
         <translation type="unfinished"></translation>
     </message>
@@ -5027,7 +5188,7 @@ Please try again.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../2fadialog.cpp" line="+128"/>
+        <location filename="../2fadialog.cpp" line="+172"/>
         <source>Wrong 2FA Code</source>
         <translation type="unfinished"></translation>
     </message>
@@ -5076,7 +5237,7 @@ Please try again.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../2faqrdialog.cpp" line="+83"/>
+        <location filename="../2faqrdialog.cpp" line="+89"/>
         <source>Resulting URI too long, try to reduce the text for label / message.</source>
         <translation type="unfinished">Resulting URI too long, try to reduce the text for label / message.</translation>
     </message>
@@ -5117,7 +5278,7 @@ Please try again.</source>
 <context>
     <name>UnitDisplayStatusBarControl</name>
     <message>
-        <location filename="../bitcoingui.cpp" line="+105"/>
+        <location filename="../bitcoingui.cpp" line="+98"/>
         <source>Unit to show amounts in. Click to select another unit.</source>
         <translation>Unit to show amounts in. Click to select another unit.</translation>
     </message>
@@ -5133,7 +5294,7 @@ Please try again.</source>
 <context>
     <name>WalletModel</name>
     <message>
-        <location filename="../walletmodel.cpp" line="+344"/>
+        <location filename="../walletmodel.cpp" line="+348"/>
         <source>Send Coins</source>
         <translation>Send Coins</translation>
     </message>
@@ -5164,26 +5325,6 @@ Please try again.</source>
         <location line="+1"/>
         <source>Wallet Data (*.dat)</source>
         <translation>Wallet Data (*.dat)</translation>
-    </message>
-    <message>
-        <location line="+6"/>
-        <source>Backup Failed</source>
-        <translation>Backup Failed</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>There was an error trying to save the wallet data to %1.</source>
-        <translation>There was an error trying to save the wallet data to %1.</translation>
-    </message>
-    <message>
-        <location line="+3"/>
-        <source>Backup Successful</source>
-        <translation>Backup Successful</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>The wallet data was successfully saved to %1.</source>
-        <translation>The wallet data was successfully saved to %1.</translation>
     </message>
 </context>
 <context>
@@ -5279,17 +5420,7 @@ Please try again.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+3"/>
-        <source>Fees (in PRCY/Kb) smaller than this are considered zero fee for relaying (default: %s)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+3"/>
-        <source>Fees (in PRCY/Kb) smaller than this are considered zero fee for transaction creation (default: %s)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+3"/>
+        <location line="+9"/>
         <source>Flush database activity from memory pool to disk log every &lt;n&gt; megabytes (default: %u)</source>
         <translation type="unfinished">Flush database activity from memory pool to disk log every &lt;n&gt; megabytes (default: %u)</translation>
     </message>
@@ -5390,6 +5521,11 @@ Please try again.</source>
     </message>
     <message>
         <location line="+3"/>
+        <source>Specify custom backup path to add a copy of any wallet backup. If set as dir, every backup generates a timestamped file. If set as file, will rewrite to that file every backup.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
         <source>Support filtering of blocks and transaction with bloom filters (default: %u)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -5575,6 +5711,11 @@ Please try again.</source>
     </message>
     <message>
         <location line="+3"/>
+        <source>Copyright (C) 2020-%i The PRCY developers</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Corrupted block database detected</source>
         <translation type="unfinished">Corrupted block database detected</translation>
     </message>
@@ -5709,12 +5850,7 @@ Please try again.</source>
         <translation type="unfinished">Failed to read block</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Fee (in PRCY/kB) to add to transactions you send (default: %s)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="+2"/>
         <source>Force safe mode (default: %u)</source>
         <translation type="unfinished">Force safe mode (default: %u)</translation>
     </message>
@@ -5804,7 +5940,12 @@ Please try again.</source>
         <translation type="unfinished">Invalid private key.</translation>
     </message>
     <message>
-        <location line="+68"/>
+        <location line="+34"/>
+        <source>Reindex the %s money supply statistics</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+33"/>
         <source>SwiftX options:</source>
         <translation type="unfinished"></translation>
     </message>
@@ -5814,7 +5955,7 @@ Please try again.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-135"/>
+        <location line="-139"/>
         <source>Accept connections from outside (default: 1 if no -proxy or -connect/-noconnect)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -5834,12 +5975,22 @@ Please try again.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+57"/>
+        <location line="+19"/>
+        <source>Fees (in %s/Kb) smaller than this are considered zero fee for relaying (default: %s)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Fees (in %s/Kb) smaller than this are considered zero fee for transaction creation (default: %s)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+35"/>
         <source>Query for peer addresses via DNS lookup, if low on addresses (default: 1 unless -connect/-noconnect)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+41"/>
+        <location line="+45"/>
         <source>Total length of network version string (%i) exceeds maximum length (%i). Reduce the number or size of uacomments.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -5924,7 +6075,7 @@ Please try again.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+4"/>
         <source>Currently the Number of supported recipients must be 1</source>
         <translation type="unfinished"></translation>
     </message>
@@ -6004,7 +6155,12 @@ Please try again.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+13"/>
+        <location line="+2"/>
+        <source>Fee (in %s/kB) to add to transactions you send (default: %s)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+11"/>
         <source>Input commitments are not correct</source>
         <translation type="unfinished"></translation>
     </message>
@@ -6179,17 +6335,7 @@ Please try again.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Reindex the PRCY money supply statistics</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Reindex the accumulator database</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="+2"/>
         <source>Relay and mine data carrier transactions (default: %u)</source>
         <translation type="unfinished">Relay and mine data carrier transactions (default: %u)</translation>
     </message>
