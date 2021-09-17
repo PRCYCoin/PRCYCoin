@@ -44,6 +44,10 @@ SendCoinsEntry::SendCoinsEntry(QWidget* parent) : QStackedWidget(parent),
     //TODO-NOTE: Hide address book button
     ui->addressBookButton->setVisible(false);
 
+    // Hide Description, currently unused
+    ui->addAsLabel->setVisible(false);
+    ui->labelLabel->setVisible(false);
+
     QLocale lo(QLocale::C);
     lo.setNumberOptions(QLocale::RejectGroupSeparator);
     QDoubleValidator *dblVal = new QDoubleValidator(0, Params().MAX_MONEY, 8, ui->payAmount);
@@ -103,7 +107,7 @@ void SendCoinsEntry::clear()
 {
     // clear UI elements for normal payment
     ui->payTo->clear();
-    ui->addAsLabel->clear();
+    //ui->addAsLabel->clear();
     ui->payAmount->clear();
     // clear UI elements for insecure payment request
     ui->payTo_is->clear();
@@ -150,7 +154,7 @@ SendCoinsRecipient SendCoinsEntry::getValue()
 
     // Normal payment
     recipient.address = ui->payTo->text();
-    recipient.label = ui->addAsLabel->text();
+    //recipient.label = ui->addAsLabel->text();
     recipient.amount = getValidatedAmount();
 
     return recipient;
@@ -159,7 +163,7 @@ SendCoinsRecipient SendCoinsEntry::getValue()
 QWidget* SendCoinsEntry::setupTabChain(QWidget* prev)
 {
     QWidget::setTabOrder(prev, ui->payTo);
-    QWidget::setTabOrder(ui->payTo, ui->addAsLabel);
+    //QWidget::setTabOrder(ui->payTo, ui->addAsLabel);
 
     return ui->deleteButton;
 }
@@ -187,10 +191,10 @@ void SendCoinsEntry::setValue(const SendCoinsRecipient& value)
         }
     } else // normal payment
     {
-        ui->addAsLabel->clear();
+        //ui->addAsLabel->clear();
         ui->payTo->setText(recipient.address); // this may set a label from addressbook
-        if (!recipient.label.isEmpty())        // if a label had been set from the addressbook, dont overwrite with an empty label
-            ui->addAsLabel->setText(recipient.label);
+        //if (!recipient.label.isEmpty())        // if a label had been set from the addressbook, dont overwrite with an empty label
+            //ui->addAsLabel->setText(recipient.label);
         ui->payAmount->setText(QString::number((double)(recipient.amount) / (double)COIN, 'f', 3));
     }
 }
@@ -228,7 +232,7 @@ bool SendCoinsEntry::updateLabel(const QString& address)
     // Fill in label from address book, if address has an associated label
     QString associatedLabel = model->getAddressTableModel()->labelForAddress(address);
     if (!associatedLabel.isEmpty()) {
-        ui->addAsLabel->setText(associatedLabel);
+        //ui->addAsLabel->setText(associatedLabel);
         return true;
     }
 
