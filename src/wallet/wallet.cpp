@@ -4230,20 +4230,31 @@ bool CWallet::selectDecoysAndRealIndex(CTransaction& tx, int& myIndex, int ringS
                     numDecoys++;
                 }
             } else if ((int)coinbaseDecoys.size() >= ringSize) {
-                for (size_t j = 0; j < coinbaseDecoys.size(); j++) {
-                    const std::pair<COutPoint, uint256>& entry = coinbaseDecoys[j];
+                // Small-pool case: pick decoys in RANDOM order, per input, rather than
+                // taking the first ringSize in the pool's fixed (COutPoint-sorted)
+                // order - a deterministic set of the smallest outpoints leaks the real
+                // input by elimination and lets an observer correlate rings across
+                // inputs/transactions. Fisher-Yates shuffle of the indices gives an
+                // independent uniform ring per input. (An invalid/blacklisted outpoint
+                // is skipped with `continue`, not `break`, so it does not truncate the
+                // ring.)
+                std::vector<size_t> order(coinbaseDecoys.size());
+                for (size_t j = 0; j < order.size(); j++) order[j] = j;
+                for (size_t j = order.size(); j > 1; j--) {
+                    size_t k = secp256k1_rand32() % j;
+                    std::swap(order[j - 1], order[k]);
+                }
+                for (size_t t = 0; t < order.size() && numDecoys < ringSize; t++) {
+                    const std::pair<COutPoint, uint256>& entry = coinbaseDecoys[order[t]];
                     if (mapBlockIndex.count(entry.second) < 1) continue;
                     CBlockIndex* atTheblock = mapBlockIndex[entry.second];
                     if (!atTheblock || !chainActive.Contains(atTheblock)) continue;
                     if (!chainActive.Contains(atTheblock)) continue;
                     if (1 + chainActive.Height() - atTheblock->nHeight < DecoyConfirmationMinimum) continue;
                     COutPoint outpoint = entry.first;
-                    if (!ValidOutPoint(outpoint)) {
-                        break;
-                    }
+                    if (!ValidOutPoint(outpoint)) continue;
                     tx.vin[i].decoys.push_back(outpoint);
                     numDecoys++;
-                    if (numDecoys == ringSize) break;
                 }
             } else {
                 LogPrintf("Not enough decoys. Please wait approximately 10 minutes and try again.\n");
@@ -4285,20 +4296,25 @@ bool CWallet::selectDecoysAndRealIndex(CTransaction& tx, int& myIndex, int ringS
                     numDecoys++;
                 }
             } else if ((int)mergedDecoys.size() >= ringSize) {
-                for (size_t j = 0; j < mergedDecoys.size(); j++) {
-                    const std::pair<COutPoint, uint256>& entry = mergedDecoys[j];
+                // See the coinbase branch above: pick decoys in random order per input
+                // instead of the deterministic sorted prefix, to preserve ring anonymity.
+                std::vector<size_t> order(mergedDecoys.size());
+                for (size_t j = 0; j < order.size(); j++) order[j] = j;
+                for (size_t j = order.size(); j > 1; j--) {
+                    size_t k = secp256k1_rand32() % j;
+                    std::swap(order[j - 1], order[k]);
+                }
+                for (size_t t = 0; t < order.size() && numDecoys < ringSize; t++) {
+                    const std::pair<COutPoint, uint256>& entry = mergedDecoys[order[t]];
                     if (mapBlockIndex.count(entry.second) < 1) continue;
                     CBlockIndex* atTheblock = mapBlockIndex[entry.second];
                     if (!atTheblock || !chainActive.Contains(atTheblock)) continue;
                     if (!chainActive.Contains(atTheblock)) continue;
                     if (1 + chainActive.Height() - atTheblock->nHeight < DecoyConfirmationMinimum) continue;
                     COutPoint outpoint = entry.first;
-                    if (!ValidOutPoint(outpoint)) {
-                        break;
-                    }
+                    if (!ValidOutPoint(outpoint)) continue;
                     tx.vin[i].decoys.push_back(outpoint);
                     numDecoys++;
-                    if (numDecoys == ringSize) break;
                 }
             } else {
                 LogPrintf("Not enough decoys. Please wait approximately 10 minutes and try again.\n");
