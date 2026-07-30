@@ -4,19 +4,44 @@
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 name: Github Actions CI for PRCY (Ubuntu 20 --enable-debug)
-on: [push, pull_request]
+on:
+  push:
+  pull_request:
+  workflow_dispatch:   # adds a manual "Run workflow" button (no [debug] needed)
 env:
   SOURCE_ARTIFACT: source
+# Container jobs default run: steps to plain sh, which has no brace expansion
+# (hosted runners defaulted to bash). Several packaging steps rely on braces.
+defaults:
+  run:
+    shell: bash
 jobs:
   create-source-distribution:
     name: Create Source Distribution
-    runs-on: ubuntu-20.04
-    if: "contains(github.event.head_commit.message, '[debug]')"
+    runs-on: ubuntu-latest
+    container: ubuntu:20.04
+    if: "github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[debug]')"
     env:
       ARTIFACT_DIR: source
     steps:
+    - name: Prepare container (ubuntu:20.04 base image)
+      run: |
+        export DEBIAN_FRONTEND=noninteractive
+        apt-get update
+        apt-get install -y \
+          sudo ca-certificates curl wget git \
+          build-essential g++ make autoconf automake libtool pkg-config cmake bison \
+          python3 python3-setuptools patch xz-utils bzip2 unzip zip bsdmainutils file \
+          clang llvm imagemagick gettext \
+          libtinfo5 zlib1g-dev libbz2-dev xorriso
     - name: Checkout
-      uses: actions/checkout@v3
+      uses: actions/checkout@v5
+    - name: Ensure version.txt Exists
+      run: |
+        if [ ! -f version.txt ]; then
+          awk -F'[(,) ]+' '/^define\(_CLIENT_VERSION_(MAJOR|MINOR|REVISION|BUILD),/ {v[++i]=$3} END {print v[1]"."v[2]"."v[3]"."v[4]}' configure.ac > version.txt
+          echo "version.txt missing from repo; generated $(cat version.txt) from configure.ac"
+        fi
     - name: Create Version Variable
       run: |
         export VERSION=$(cat version.txt | sed 's/[^0-9,.]//g')
@@ -47,22 +72,34 @@ jobs:
       run: |
         mv depends.tar.gz prcycoin.tar.gz $ARTIFACT_DIR
     - name: Upload Artifact
-      uses: actions/upload-artifact@v1
+      uses: actions/upload-artifact@v6
       with:
         name: ${{ env.SOURCE_ARTIFACT }}
         path: ${{ env.ARTIFACT_DIR }}
   build-x86_64-linux:
     name: Build for x86 Linux 64bit
     needs: create-source-distribution
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
+    container: ubuntu:20.04
     env:
       ARTIFACT_DIR: prcycoin-x86_64-linux-debug
       TEST_LOG_ARTIFACT_DIR: test-logs
     steps:
+    - name: Prepare container (ubuntu:20.04 base image)
+      run: |
+        export DEBIAN_FRONTEND=noninteractive
+        apt-get update
+        apt-get install -y \
+          sudo ca-certificates curl wget git \
+          build-essential g++ make autoconf automake libtool pkg-config cmake bison \
+          python3 python3-setuptools patch xz-utils bzip2 unzip zip bsdmainutils file \
+          clang llvm imagemagick gettext \
+          libtinfo5 zlib1g-dev libbz2-dev xorriso
     - name: Getting Source
-      uses: actions/download-artifact@v4.1.7
+      uses: actions/download-artifact@v7
       with:
         name: ${{ env.SOURCE_ARTIFACT }}
+        path: ${{ env.SOURCE_ARTIFACT }}
     - name: Extract Archives
       run: |
         tar -xzf depends.tar.gz
@@ -99,21 +136,33 @@ jobs:
         chmod +x $SOURCE_ARTIFACT/src/{prcycoin-cli,prcycoin-tx,prcycoind,qt/prcycoin-qt}
         mv $SOURCE_ARTIFACT/src/{prcycoin-cli,prcycoin-tx,prcycoind,qt/prcycoin-qt} $ARTIFACT_DIR
     - name: Upload Artifact
-      uses: actions/upload-artifact@v1
+      uses: actions/upload-artifact@v6
       with:
         name: prcycoin-v${{ env.VERSION }}-x86_64-linux-debug
         path: ${{ env.ARTIFACT_DIR }}
   build-win64:
     name: Build for Win64
     needs: create-source-distribution
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
+    container: ubuntu:20.04
     env:
       ARTIFACT_DIR: prcycoin-win64-debug
     steps:
+    - name: Prepare container (ubuntu:20.04 base image)
+      run: |
+        export DEBIAN_FRONTEND=noninteractive
+        apt-get update
+        apt-get install -y \
+          sudo ca-certificates curl wget git \
+          build-essential g++ make autoconf automake libtool pkg-config cmake bison \
+          python3 python3-setuptools patch xz-utils bzip2 unzip zip bsdmainutils file \
+          clang llvm imagemagick gettext \
+          libtinfo5 zlib1g-dev libbz2-dev xorriso
     - name: Getting Source
-      uses: actions/download-artifact@v4.1.7
+      uses: actions/download-artifact@v7
       with:
         name: ${{ env.SOURCE_ARTIFACT }}
+        path: ${{ env.SOURCE_ARTIFACT }}
     - name: Extract Archives
       run: |
         tar -xzf depends.tar.gz
@@ -154,22 +203,34 @@ jobs:
         strip $SOURCE_ARTIFACT/src/{prcycoin-cli.exe,prcycoin-tx.exe,prcycoind.exe,qt/prcycoin-qt.exe}
         mv $SOURCE_ARTIFACT/{prcycoin-*.exe,src/prcycoin-cli.exe,src/prcycoin-tx.exe,src/prcycoind.exe,src/qt/prcycoin-qt.exe} $ARTIFACT_DIR
     - name: Upload Artifact
-      uses: actions/upload-artifact@v1
+      uses: actions/upload-artifact@v6
       with:
         name: prcycoin-v${{ env.VERSION }}-win64-debug
         path: ${{ env.ARTIFACT_DIR }}
   build-osx64:
     name: Build for MacOSX
     needs: create-source-distribution
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
+    container: ubuntu:20.04
     env:
       ARTIFACT_DIR: prcycoin-macosx-debug
       SDK_URL: https://bitcoincore.org/depends-sources/sdks
     steps:
+    - name: Prepare container (ubuntu:20.04 base image)
+      run: |
+        export DEBIAN_FRONTEND=noninteractive
+        apt-get update
+        apt-get install -y \
+          sudo ca-certificates curl wget git \
+          build-essential g++ make autoconf automake libtool pkg-config cmake bison \
+          python3 python3-setuptools patch xz-utils bzip2 unzip zip bsdmainutils file \
+          clang llvm imagemagick gettext \
+          libtinfo5 zlib1g-dev libbz2-dev xorriso
     - name: Getting Source
-      uses: actions/download-artifact@v4.1.7
+      uses: actions/download-artifact@v7
       with:
         name: ${{ env.SOURCE_ARTIFACT }}
+        path: ${{ env.SOURCE_ARTIFACT }}
     - name: Extract Archives
       run: |
         tar -xzf depends.tar.gz
@@ -223,21 +284,33 @@ jobs:
         mkdir -p $ARTIFACT_DIR
         mv $SOURCE_ARTIFACT/{*.dmg,src/prcycoin-cli,src/prcycoin-tx,src/prcycoind,src/qt/prcycoin-qt} $ARTIFACT_DIR
     - name: Upload Artifact
-      uses: actions/upload-artifact@v1
+      uses: actions/upload-artifact@v6
       with:
         name: prcycoin-v${{ env.VERSION }}-macosx-debug
         path: ${{ env.ARTIFACT_DIR }}
   build-aarch64-linux:
     name: Build for ARM Linux 64bit
     needs: create-source-distribution
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
+    container: ubuntu:20.04
     env:
       ARTIFACT_DIR: prcycoin-aarch64-linux-debug
     steps:
+    - name: Prepare container (ubuntu:20.04 base image)
+      run: |
+        export DEBIAN_FRONTEND=noninteractive
+        apt-get update
+        apt-get install -y \
+          sudo ca-certificates curl wget git \
+          build-essential g++ make autoconf automake libtool pkg-config cmake bison \
+          python3 python3-setuptools patch xz-utils bzip2 unzip zip bsdmainutils file \
+          clang llvm imagemagick gettext \
+          libtinfo5 zlib1g-dev libbz2-dev xorriso
     - name: Getting Source
-      uses: actions/download-artifact@v4.1.7
+      uses: actions/download-artifact@v7
       with:
         name: ${{ env.SOURCE_ARTIFACT }}
+        path: ${{ env.SOURCE_ARTIFACT }}
     - name: Extract Archives
       run: |
         tar -xzf depends.tar.gz
@@ -273,21 +346,33 @@ jobs:
         chmod +x $SOURCE_ARTIFACT/src/{prcycoin-cli,prcycoin-tx,prcycoind,qt/prcycoin-qt}
         mv $SOURCE_ARTIFACT/src/{prcycoin-cli,prcycoin-tx,prcycoind,qt/prcycoin-qt} $ARTIFACT_DIR
     - name: Upload Artifact
-      uses: actions/upload-artifact@v1
+      uses: actions/upload-artifact@v6
       with:
         name: prcycoin-v${{ env.VERSION }}-aarch64-linux-debug
         path: ${{ env.ARTIFACT_DIR }}
   build-arm-linux-gnueabihf:
     name: Build for ARM Linux 32bit
     needs: create-source-distribution
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
+    container: ubuntu:20.04
     env:
       ARTIFACT_DIR: prcycoin-arm32-debug
     steps:
+    - name: Prepare container (ubuntu:20.04 base image)
+      run: |
+        export DEBIAN_FRONTEND=noninteractive
+        apt-get update
+        apt-get install -y \
+          sudo ca-certificates curl wget git \
+          build-essential g++ make autoconf automake libtool pkg-config cmake bison \
+          python3 python3-setuptools patch xz-utils bzip2 unzip zip bsdmainutils file \
+          clang llvm imagemagick gettext \
+          libtinfo5 zlib1g-dev libbz2-dev xorriso
     - name: Getting Source
-      uses: actions/download-artifact@v4.1.7
+      uses: actions/download-artifact@v7
       with:
         name: ${{ env.SOURCE_ARTIFACT }}
+        path: ${{ env.SOURCE_ARTIFACT }}
     - name: Extract Archives
       run: |
         tar -xzf depends.tar.gz
@@ -323,21 +408,33 @@ jobs:
         chmod +x $SOURCE_ARTIFACT/src/{prcycoin-cli,prcycoin-tx,prcycoind,qt/prcycoin-qt}
         mv $SOURCE_ARTIFACT/src/{prcycoin-cli,prcycoin-tx,prcycoind,qt/prcycoin-qt} $ARTIFACT_DIR
     - name: Upload Artifact
-      uses: actions/upload-artifact@v1
+      uses: actions/upload-artifact@v6
       with:
         name: prcycoin-v${{ env.VERSION }}-arm32-debug
         path: ${{ env.ARTIFACT_DIR }}
   build-riscv64-linux-gnu:
     name: Build for RISC-V 64-bit
     needs: create-source-distribution
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
+    container: ubuntu:20.04
     env:
       ARTIFACT_DIR: prcycoin-riscv64-debug
     steps:
+    - name: Prepare container (ubuntu:20.04 base image)
+      run: |
+        export DEBIAN_FRONTEND=noninteractive
+        apt-get update
+        apt-get install -y \
+          sudo ca-certificates curl wget git \
+          build-essential g++ make autoconf automake libtool pkg-config cmake bison \
+          python3 python3-setuptools patch xz-utils bzip2 unzip zip bsdmainutils file \
+          clang llvm imagemagick gettext \
+          libtinfo5 zlib1g-dev libbz2-dev xorriso
     - name: Getting Source
-      uses: actions/download-artifact@v4.1.7
+      uses: actions/download-artifact@v7
       with:
         name: ${{ env.SOURCE_ARTIFACT }}
+        path: ${{ env.SOURCE_ARTIFACT }}
     - name: Extract Archives
       run: |
         tar -xzf depends.tar.gz
@@ -373,7 +470,7 @@ jobs:
         chmod +x $SOURCE_ARTIFACT/src/{prcycoin-cli,prcycoin-tx,prcycoind,qt/prcycoin-qt}
         mv $SOURCE_ARTIFACT/src/{prcycoin-cli,prcycoin-tx,prcycoind,qt/prcycoin-qt} $ARTIFACT_DIR
     - name: Upload Artifact
-      uses: actions/upload-artifact@v1
+      uses: actions/upload-artifact@v6
       with:
         name: prcycoin-v${{ env.VERSION }}-riscv64-debug
         path: ${{ env.ARTIFACT_DIR }}
