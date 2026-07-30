@@ -263,7 +263,22 @@ jobs:
       run: |
         mkdir -p depends/sdk-sources depends/SDKs
         if [ -n "${{ env.XCODE_VERSION }}" ] && [ ! -f "${{ env.OSX_SDK_PATH }}" ]; then
-          curl --location --fail "${{ env.SDK_URL }}/${{ env.OSX_SDK_BASENAME }}" -o "${{ env.OSX_SDK_PATH }}"
+          # The SDK host is occasionally unreachable (curl exit 7). Retry with backoff
+          # instead of failing the whole job; a partial file is removed between attempts.
+          ok=0
+          for i in 1 2 3 4 5; do
+            if curl --location --fail --connect-timeout 30 --retry 3 --retry-delay 5 \
+                 "${{ env.SDK_URL }}/${{ env.OSX_SDK_BASENAME }}" -o "${{ env.OSX_SDK_PATH }}"; then
+              ok=1; break
+            fi
+            echo "macOS SDK download attempt $i failed; retrying in $((i * 10))s"
+            rm -f "${{ env.OSX_SDK_PATH }}"
+            sleep $((i * 10))
+          done
+          if [ "$ok" != 1 ]; then
+            echo "::error::macOS SDK download failed after 5 attempts (${{ env.SDK_URL }}/${{ env.OSX_SDK_BASENAME }})"
+            exit 1
+          fi
         fi
         if [ -n "${{ env.XCODE_VERSION }}" ] && [ -f "${{ env.OSX_SDK_PATH }}" ]; then
           tar -C "depends/SDKs" -xf "${{ env.OSX_SDK_PATH }}"
