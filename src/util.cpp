@@ -114,7 +114,15 @@ std::map<std::string, std::vector<std::string> > mapMultiArgs;
 bool fDaemon = false;
 std::string strMiscWarning;
 
-/** Init OpenSSL library multithreading support */
+/** Init OpenSSL library multithreading support.
+ *
+ * OpenSSL < 1.1.0 required the application to install locking callbacks for
+ * thread safety. OpenSSL >= 1.1.0 is internally thread-safe and REMOVED this
+ * API entirely (CRYPTO_LOCK, CRYPTO_num_locks, CRYPTO_set_locking_callback),
+ * so the whole apparatus must be compiled out there or the build fails to link.
+ * LibreSSL keeps the legacy 1.0.x-style API, so it stays on the old path.
+ */
+#if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
 static RecursiveMutex** ppmutexOpenSSL;
 void locking_callback(int mode, int i, const char* file, int line) NO_THREAD_SAFETY_ANALYSIS
 {
@@ -124,6 +132,7 @@ void locking_callback(int mode, int i, const char* file, int line) NO_THREAD_SAF
         LEAVE_CRITICAL_SECTION(*ppmutexOpenSSL[i]);
     }
 }
+#endif
 
 // Init
 class CInit
@@ -131,11 +140,13 @@ class CInit
 public:
     CInit()
     {
-        // Init OpenSSL library multithreading support
+#if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
+        // Init OpenSSL library multithreading support (pre-1.1.0 only; see above)
         ppmutexOpenSSL = (RecursiveMutex**)OPENSSL_malloc(CRYPTO_num_locks() * sizeof(RecursiveMutex*));
         for (int i = 0; i < CRYPTO_num_locks(); i++)
             ppmutexOpenSSL[i] = new RecursiveMutex();
         CRYPTO_set_locking_callback(locking_callback);
+#endif
 
         // OpenSSL can optionally load a config file which lists optional loadable modules and engines.
         // We don't use them so we don't require the config. However some of our libs may call functions
@@ -144,8 +155,10 @@ public:
         // that the config appears to have been loaded and there are no modules/engines available.
         OPENSSL_no_config();
 
-#ifdef WIN32
-        // Seed OpenSSL PRNG with current contents of the screen
+#if defined(WIN32) && (OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER))
+        // Seed OpenSSL PRNG with current contents of the screen.
+        // RAND_screen() was removed in OpenSSL 1.1.0 (it is only a legacy
+        // Windows helper; RandAddSeed() below still seeds the PRNG on all builds).
         RAND_screen();
 #endif
 
@@ -154,6 +167,7 @@ public:
     }
     ~CInit()
     {
+#if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
         // Securely erase the memory used by the PRNG
         RAND_cleanup();
         // Shutdown OpenSSL library multithreading support
@@ -161,6 +175,7 @@ public:
         for (int i = 0; i < CRYPTO_num_locks(); i++)
             delete ppmutexOpenSSL[i];
         OPENSSL_free(ppmutexOpenSSL);
+#endif
     }
 } instance_of_cinit;
 

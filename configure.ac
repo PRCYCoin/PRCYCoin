@@ -1023,10 +1023,17 @@ AC_CHECK_DECLS([EVP_MD_CTX_new],,,[AC_INCLUDES_DEFAULT
 CXXFLAGS="${save_CXXFLAGS}"
 
 AC_CHECK_LIB([crypto],[RAND_egd],[],[
+  dnl RAND_egd is present in OpenSSL 1.0.x but absent in 1.1.x (and on mingw/Windows), so
+  dnl this branch is taken for any modern OpenSSL. PRCY performs ALL consensus crypto
+  dnl (ECDSA via libsecp256k1, and RingCT via the vendored secp256k1 modules) WITHOUT
+  dnl OpenSSL -- OpenSSL is used only for peripheral, non-consensus code -- so the OpenSSL
+  dnl version cannot affect consensus compatibility. Accept newer OpenSSL with a note
+  dnl instead of aborting. --with-unsupported-ssl is kept as an accepted no-op so existing
+  dnl build scripts that pass it keep working.
   AC_ARG_WITH([unsupported-ssl],
-    [AS_HELP_STRING([--with-unsupported-ssl],[Build with system SSL (default is no; DANGEROUS; NOT SUPPORTED; You should use OpenSSL 1.0)])],
-    [AC_MSG_WARN([Detected unsupported SSL version: This is NOT supported, and may break consensus compatibility!])],
-    [AC_MSG_ERROR([Detected unsupported SSL version: This is NOT supported, and may break consensus compatibility!])]
+    [AS_HELP_STRING([--with-unsupported-ssl],[Deprecated no-op; newer OpenSSL (>= 1.1) is accepted regardless, since PRCY's consensus crypto is libsecp256k1, not OpenSSL.])],
+    [AC_MSG_WARN([OpenSSL >= 1.1 detected; proceeding (consensus crypto is libsecp256k1, not OpenSSL).])],
+    [AC_MSG_WARN([OpenSSL >= 1.1 detected (no RAND_egd); proceeding. PRCY's consensus crypto is libsecp256k1, not OpenSSL, so this does not affect consensus compatibility.])]
   )
 ])
 
@@ -1332,7 +1339,14 @@ if test x$need_bundled_univalue = xyes; then
   AC_CONFIG_SUBDIRS([src/univalue])
 fi
 
-ac_configure_args="${ac_configure_args} --enable-module-bulletproof --enable-experimental --enable-module-generator --enable-module-commitment --disable-shared --with-pic --disable-jni"
+dnl --enable-tests=no: do NOT build the vendored secp256k1 / secp256k1-mw test
+dnl suites. Their configure runs SECP_OPENSSL_CHECK, which (when tests are on)
+dnl compiles an OpenSSL EC cross-check into tests.c using the pre-1.1 API
+dnl (EC_KEY, ECDSA_SIG, o2i_ECPublicKey). Those structs became opaque in
+dnl OpenSSL >= 1.1.0, so that test code fails to compile against modern OpenSSL.
+dnl The libraries themselves do not use OpenSSL, so disabling only their tests
+dnl makes the tree build against OpenSSL 1.1.x while changing nothing at runtime.
+ac_configure_args="${ac_configure_args} --enable-module-bulletproof --enable-experimental --enable-module-generator --enable-module-commitment --disable-shared --with-pic --disable-jni --enable-tests=no --enable-benchmark=no"
 
 AC_CONFIG_SUBDIRS([src/secp256k1])
 AC_CONFIG_SUBDIRS([src/secp256k1-mw])
