@@ -4093,6 +4093,15 @@ bool CWallet::MakeShnorrSignatureTxIn(CTxIn& txin, uint256 cts)
 
 bool CWallet::selectDecoysAndRealIndex(CTransaction& tx, int& myIndex, int ringSize)
 {
+    // Guard against an empty input set: the myIndex computation at the end
+    // dereferences tx.vin[0] unconditionally. makeRingCT calls this before its
+    // own vin-empty check, and CreateTransactionBulletProof can reach here with an
+    // empty vin if its coin-selection retry loop is exhausted, which would be an
+    // out-of-bounds read. Fail cleanly instead.
+    if (tx.vin.empty()) {
+        LogPrintf("%s: no inputs selected\n", __func__);
+        return false;
+    }
     LogPrintf("Selecting coinbase decoys for transaction\n");
     if (coinbaseDecoysPool.size() <= 100) {
         for (int i = chainActive.Height() - Params().COINBASE_MATURITY(); i > 0; i--) {
