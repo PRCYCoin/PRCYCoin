@@ -995,6 +995,7 @@ void ThreadFlushWalletDB(const std::string& strFile)
     unsigned int nLastSeen = CWalletDB::GetUpdateCounter();
     unsigned int nLastFlushed = CWalletDB::GetUpdateCounter();
     int64_t nLastWalletUpdate = GetTime();
+    int64_t nLastForcedFlush = GetTime();
     while (true) {
         MilliSleep(500);
 
@@ -1003,7 +1004,15 @@ void ThreadFlushWalletDB(const std::string& strFile)
             nLastWalletUpdate = GetTime();
         }
 
-        if (nLastFlushed != CWalletDB::GetUpdateCounter() && GetTime() - nLastWalletUpdate >= 2) {
+        // Flush once the wallet has been idle for 2s, OR at least every 60s of
+        // sustained activity. The idle-only trigger never fires during a long
+        // catch-up sync (a wallet write every block keeps resetting the idle
+        // timer), so the BerkeleyDB transaction log would grow without a
+        // checkpoint until the environment panics with DB_RUNRECOVERY. The 60s
+        // cap bounds the log under continuous load on every path (block sync,
+        // staking, normal operation), not just the rescan loop.
+        if (nLastFlushed != CWalletDB::GetUpdateCounter() &&
+            (GetTime() - nLastWalletUpdate >= 2 || GetTime() - nLastForcedFlush >= 60)) {
             TRY_LOCK(bitdb.cs_db, lockDb);
             if (lockDb) {
                 // Don't do this if any databases are in use
@@ -1020,6 +1029,7 @@ void ThreadFlushWalletDB(const std::string& strFile)
                     if (mi != bitdb.mapFileUseCount.end()) {
                         LogPrint(BCLog::DB, "Flushing wallet.dat\n");
                         nLastFlushed = CWalletDB::GetUpdateCounter();
+                        nLastForcedFlush = GetTime();
                         int64_t nStart = GetTimeMillis();
 
                         // Flush wallet.dat so it's self contained
