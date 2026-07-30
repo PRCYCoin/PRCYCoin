@@ -1918,7 +1918,16 @@ bool CWallet::DeleteTransactions(std::vector<uint256> &removeTxs, bool fRescan)
 
     for (int i = 0; i < removeTxs.size(); i++) {
         bool fRemoveFromSpends = !(mapWallet.at(removeTxs[i]).IsCoinBase());
-        if (EraseFromWallet(removeTxs[i])) {
+        // Erase through the single non-flushing handle opened above, instead of
+        // EraseFromWallet() which opens a fresh flush-on-close CWalletDB per tx and
+        // forces a full BerkeleyDB checkpoint (fsync) on every erase. A prune cycle
+        // on a large wallet can delete tens of thousands of transactions, so those
+        // per-tx checkpoints dominate; going through 'walletdb' avoids them (the
+        // erases are durably checkpointed by the periodic flush, same as every other
+        // rescan/delete write). The in-memory mapWallet erase is kept identical to
+        // EraseFromWallet(): erase from mapWallet, and only if that removed the entry
+        // erase it from the database.
+        if (mapWallet.erase(removeTxs[i]) && walletdb.EraseTx(removeTxs[i])) {
             if (fRemoveFromSpends) {
                 RemoveFromSpends(removeTxs[i]);
             }
