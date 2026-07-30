@@ -1,47 +1,41 @@
 PACKAGE=qt
-$(package)_version=5.12.12
-$(package)_download_path=https://download.qt.io/archive/qt/5.12/$($(package)_version)/submodules
-$(package)_suffix=everywhere-src-$($(package)_version).tar.xz
+$(package)_version=5.15.5
+$(package)_download_path=https://download.qt.io/official_releases/qt/5.15/$($(package)_version)/submodules
+$(package)_suffix=everywhere-opensource-src-$($(package)_version).tar.xz
 $(package)_file_name=qtbase-$($(package)_suffix)
-$(package)_sha256_hash=7c15c31590b6ec12408242b1a32075d1d545f35e1d41fdbad31ec670d00680f2
-$(package)_dependencies=openssl zlib
-$(package)_linux_dependencies=freetype fontconfig libxcb libxkbcommon
+$(package)_sha256_hash=0c42c799aa7c89e479a07c451bf5a301e291266ba789e81afc18f95049524edc
+# Qt no longer links OpenSSL (see -no-openssl below), so openssl is not a dependency.
+$(package)_dependencies=zlib
+# Qt 5.15 removed the bundled xcb libraries, so the xcb-util family must be provided.
+$(package)_linux_dependencies=freetype fontconfig libxcb libxkbcommon libxcb_util libxcb_util_render libxcb_util_keysyms libxcb_util_image libxcb_util_wm
 $(package)_qt_libs=corelib network widgets gui plugins testlib concurrent
 $(package)_linguist_tools = lrelease lupdate lconvert
 $(package)_patches = qt.pro qttools_src.pro
-$(package)_patches += fix_qt_pkgconfig.patch mac-qmake.conf fix_no_printer.patch no-xlib.patch
-$(package)_patches += support_new_android_ndks.patch fix_android_jni_static.patch dont_hardcode_pwd.patch
-$(package)_patches += dont_hardcode_x86_64.patch
-$(package)_patches+= fix_qpainter_non_determinism.patch fix_lib_paths.patch fix_android_pch.patch
-$(package)_patches+= fix_limits_header.patch
-$(package)_patches+= fix_montery_include.patch
+$(package)_patches += fix_qt_pkgconfig.patch mac-qmake.conf no-xlib.patch
+$(package)_patches += fix_android_jni_static.patch dont_hardcode_pwd.patch
+$(package)_patches += dont_hardcode_x86_64.patch fix_montery_include.patch
+$(package)_patches += qtbase-moc-ignore-gcc-macro.patch use_android_ndk23.patch
+$(package)_patches += rcc_hardcode_timestamp.patch duplicate_lcqpafonts.patch
+$(package)_patches += fast_fixed_dtoa_no_optimize.patch guix_cross_lib_path.patch
 
 # Update OSX_QT_TRANSLATIONS when this is updated
 $(package)_qttranslations_file_name=qttranslations-$($(package)_suffix)
-$(package)_qttranslations_sha256_hash=b0f7f060ec5fd7b0d3de3df4db2f6c9e93ec70e0d2b5406d4d9024bc79da6023
+$(package)_qttranslations_sha256_hash=c92af4171397a0ed272330b4fa0669790fcac8d050b07c8b8cc565ebeba6735e
 
 $(package)_qttools_file_name=qttools-$($(package)_suffix)
-$(package)_qttools_sha256_hash=33897d94f4d8f5c5b88f78d61759f774e0d12c1aec3fc001b2a418eea77f4263
+$(package)_qttools_sha256_hash=6d0778b71b2742cb527561791d1d3d255366163d54a10f78c683a398f09ffc6c
 
 $(package)_extra_sources  = $($(package)_qttranslations_file_name)
 $(package)_extra_sources += $($(package)_qttools_file_name)
 
 define $(package)_set_vars
 $(package)_config_env = QT_MAC_SDK_NO_VERSION_CHECK=1
-# OPENSSL_LIBS is consumed by Qt's "openssl" config test and the network module link.
-# It must be host-specific: -lws2_32/-lgdi32 exist only on Windows (mingw), so applying
-# them to every host made Qt's OpenSSL link test fail on Linux/macOS ("cannot find
-# -lws2_32"), which set libs.openssl=no and aborted with "Feature 'openssl-linked' ...
-# pre-condition ... libs.openssl failed". Split per host; the mingw value is unchanged.
-$(package)_config_env_mingw32 += OPENSSL_LIBS="-lssl -lcrypto -lpthread -lws2_32 -lgdi32"
-$(package)_config_env_linux += OPENSSL_LIBS="-lssl -lcrypto -lpthread -ldl"
-$(package)_config_env_darwin += OPENSSL_LIBS="-lssl -lcrypto"
 $(package)_config_opts_release = -release
 $(package)_config_opts_release += -silent
 $(package)_config_opts_debug = -debug
 $(package)_config_opts_debug += -optimized-tools
 $(package)_config_opts += -bindir $(build_prefix)/bin
-$(package)_config_opts += -c++std c++1z
+$(package)_config_opts += -c++std c++17
 $(package)_config_opts += -confirm-license
 $(package)_config_opts += -hostprefix $(build_prefix)
 $(package)_config_opts += -no-compile-examples
@@ -73,7 +67,9 @@ $(package)_config_opts += -nomake examples
 $(package)_config_opts += -nomake tests
 $(package)_config_opts += -nomake tools
 $(package)_config_opts += -opensource
-$(package)_config_opts += -openssl-linked
+# The GUI uses no Qt networking/TLS classes (no QSslSocket/QNetworkAccessManager), so Qt
+# does not need OpenSSL. This also decouples the Qt build from the wallet's OpenSSL version.
+$(package)_config_opts += -no-openssl
 $(package)_config_opts += -optimized-qmake
 $(package)_config_opts += -pkg-config
 $(package)_config_opts += -prefix $(host_prefix)
@@ -123,7 +119,7 @@ $(package)_config_opts_aarch64_darwin += -device-option QMAKE_APPLE_DEVICE_ARCHS
 $(package)_config_opts_x86_64_darwin += -device-option QMAKE_APPLE_DEVICE_ARCHS=x86_64
 endif
 
-$(package)_config_opts_linux = -qt-xcb
+$(package)_config_opts_linux = -xcb
 $(package)_config_opts_linux += -no-xcb-xlib
 $(package)_config_opts_linux += -no-feature-xlib
 $(package)_config_opts_linux += -system-freetype
@@ -227,16 +223,16 @@ define $(package)_preprocess_cmds
   cp $($(package)_patch_dir)/qttools_src.pro qttools/src/src.pro && \
   patch -p1 -i $($(package)_patch_dir)/dont_hardcode_pwd.patch && \
   patch -p1 -i $($(package)_patch_dir)/fix_qt_pkgconfig.patch && \
-  patch -p1 -i $($(package)_patch_dir)/fix_no_printer.patch && \
-  patch -p1 -i $($(package)_patch_dir)/support_new_android_ndks.patch && \
   patch -p1 -i $($(package)_patch_dir)/fix_android_jni_static.patch && \
-  patch -p1 -i $($(package)_patch_dir)/fix_android_pch.patch && \
-	patch -p1 -i $($(package)_patch_dir)/no-xlib.patch && \
+  patch -p1 -i $($(package)_patch_dir)/no-xlib.patch && \
   patch -p1 -i $($(package)_patch_dir)/dont_hardcode_x86_64.patch && \
-  patch -p1 -i $($(package)_patch_dir)/fix_qpainter_non_determinism.patch && \
-  patch -p1 -i $($(package)_patch_dir)/fix_lib_paths.patch && \
-  patch -p1 -i $($(package)_patch_dir)/fix_limits_header.patch && \
+  patch -p1 -i $($(package)_patch_dir)/qtbase-moc-ignore-gcc-macro.patch && \
   patch -p1 -i $($(package)_patch_dir)/fix_montery_include.patch && \
+  patch -p1 -i $($(package)_patch_dir)/use_android_ndk23.patch && \
+  patch -p1 -i $($(package)_patch_dir)/rcc_hardcode_timestamp.patch && \
+  patch -p1 -i $($(package)_patch_dir)/duplicate_lcqpafonts.patch && \
+  patch -p1 -i $($(package)_patch_dir)/fast_fixed_dtoa_no_optimize.patch && \
+  patch -p1 -i $($(package)_patch_dir)/guix_cross_lib_path.patch && \
   mkdir -p qtbase/mkspecs/macx-clang-linux &&\
   cp -f qtbase/mkspecs/macx-clang/qplatformdefs.h qtbase/mkspecs/macx-clang-linux/ &&\
   cp -f $($(package)_patch_dir)/mac-qmake.conf qtbase/mkspecs/macx-clang-linux/qmake.conf && \
@@ -251,8 +247,7 @@ define $(package)_preprocess_cmds
   echo "!host_build: QMAKE_CXXFLAGS   += $($(package)_cxxflags) $($(package)_cppflags)" >> qtbase/mkspecs/common/gcc-base.conf && \
   echo "!host_build: QMAKE_LFLAGS     += $($(package)_ldflags)" >> qtbase/mkspecs/common/gcc-base.conf && \
   sed -i.old "s|QMAKE_CC                = \$$$$\$$$${CROSS_COMPILE}clang|QMAKE_CC                = $($(package)_cc)|" qtbase/mkspecs/common/clang.conf && \
-  sed -i.old "s|QMAKE_CXX               = \$$$$\$$$${CROSS_COMPILE}clang++|QMAKE_CXX               = $($(package)_cxx)|" qtbase/mkspecs/common/clang.conf && \
-  sed -i.old "s/LIBRARY_PATH/(CROSS_)?\0/g" qtbase/mkspecs/features/toolchain.prf
+  sed -i.old "s|QMAKE_CXX               = \$$$$\$$$${CROSS_COMPILE}clang++|QMAKE_CXX               = $($(package)_cxx)|" qtbase/mkspecs/common/clang.conf
 endef
 
 define $(package)_config_cmds
