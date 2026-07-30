@@ -996,8 +996,25 @@ void ThreadFlushWalletDB(const std::string& strFile)
     unsigned int nLastFlushed = CWalletDB::GetUpdateCounter();
     int64_t nLastWalletUpdate = GetTime();
     int64_t nLastForcedFlush = GetTime();
+    int64_t nLastCheckpoint = GetTime();
     while (true) {
         MilliSleep(500);
+
+        // Unconditional periodic checkpoint. The full flush below only runs when
+        // NO wallet DB handle is open (nRefCount == 0) - a condition that never
+        // occurs during continuous staking (the miner thread keeps a handle in
+        // use) or a busy sync, so on those paths the BerkeleyDB transaction log
+        // would still grow without bound until the environment panics with
+        // DB_RUNRECOVERY. Unlike CloseDb, txn_checkpoint is safe to run
+        // concurrently with open handles; combined with DB_LOG_AUTO_REMOVE it
+        // trims old log files and keeps the environment healthy under any load.
+        if (GetTime() - nLastCheckpoint >= 60) {
+            TRY_LOCK(bitdb.cs_db, lockCheckpoint);
+            if (lockCheckpoint) {
+                bitdb.dbenv->txn_checkpoint(0, 0, 0);
+                nLastCheckpoint = GetTime();
+            }
+        }
 
         if (nLastSeen != CWalletDB::GetUpdateCounter()) {
             nLastSeen = CWalletDB::GetUpdateCounter();
