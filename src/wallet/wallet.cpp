@@ -1308,7 +1308,13 @@ bool CWallet::AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pbl
         if (pblock && mapBlockIndex.count(pblock->GetHash()) == 1) {
             if (!IsLocked()) {
                 try {
-                    CWalletDB(strWalletFile).WriteScannedBlockHeight(mapBlockIndex[pblock->GetHash()]->nHeight);
+                    // fFlushOnClose=false: this runs once per transaction during a
+                    // rescan; the default (flush-on-close, non-read-only) handle would
+                    // force a full BerkeleyDB txn_checkpoint (fsync) on every close.
+                    // Not flushing here is safe - a crash just re-scans (same rationale
+                    // as AddToWallet below) - and the periodic rescan checkpoint covers
+                    // durability.
+                    CWalletDB(strWalletFile, "r+", false).WriteScannedBlockHeight(mapBlockIndex[pblock->GetHash()]->nHeight);
                 } catch (const std::exception& e) {
                     LogPrintf("Cannot open data base or wallet is locked\n");
                 }
@@ -6453,12 +6459,16 @@ int CWalletTx::GetBlockHeight() const
 
 bool CWallet::ReadAccountList(std::string& accountList)
 {
-    return CWalletDB(strWalletFile).ReadStealthAccountList(accountList);
+    // Read-only, no flush-on-close. allMyPrivateKeys() calls this (and
+    // ReadStealthAccount below) once per transaction during a rescan; the default
+    // ("r+", flush-on-close) handle forces a full BerkeleyDB txn_checkpoint (fsync)
+    // on every close, which dominates rescan time on a large wallet.
+    return CWalletDB(strWalletFile, "r", false).ReadStealthAccountList(accountList);
 }
 
 bool CWallet::ReadStealthAccount(const std::string& strAccount, CStealthAccount& account)
 {
-    return CWalletDB(strWalletFile).ReadStealthAccount(strAccount, account);
+    return CWalletDB(strWalletFile, "r", false).ReadStealthAccount(strAccount, account);
 }
 
 bool CWallet::ComputeStealthPublicAddress(const std::string& accountName, std::string& pubAddress)
