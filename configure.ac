@@ -1015,6 +1015,22 @@ PKG_CHECK_MODULES([CURL], [libcurl],, [AC_MSG_ERROR([libcurl not found.])])
 AC_CHECK_HEADER([curl/curl.h],, [AC_MSG_ERROR([libcurl header not found.])])
 AC_CHECK_LIB([curl],         [main],CURL_LIBS=-lcurl, AC_MSG_ERROR(libcurl missing))
 
+dnl The AC_CHECK_LIB above replaces the pkg-config result with a bare -lcurl, which drops
+dnl libcurl's Libs.private -- the transitive libraries a STATIC libcurl needs. On Windows a
+dnl static libcurl built with the OpenSSL backend calls into the CryptoAPI certificate store
+dnl (CertOpenSystemStoreA, CertEnumCertificatesInStore, CertFreeCertificateContext, ...),
+dnl which lives in crypt32, so link it explicitly.
+dnl
+dnl This was previously satisfied by accident: Qt built with -openssl-linked pulled -lcrypt32
+dnl onto the link line transitively, so nothing referenced it directly. Any change that stops
+dnl Qt from linking OpenSSL exposes the missing library as undefined __imp_Cert* symbols when
+dnl linking prcycoin-qt.exe.
+case $host in
+  *mingw*)
+    CURL_LIBS="$CURL_LIBS -lcrypt32"
+  ;;
+esac
+
 save_CXXFLAGS="${CXXFLAGS}"
 CXXFLAGS="${CXXFLAGS} ${CRYPTO_CFLAGS} ${SSL_CFLAGS}"
 AC_CHECK_DECLS([EVP_MD_CTX_new],,,[AC_INCLUDES_DEFAULT
