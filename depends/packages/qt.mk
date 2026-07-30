@@ -1,9 +1,9 @@
 PACKAGE=qt
-$(package)_version=5.12.11
+$(package)_version=5.12.12
 $(package)_download_path=https://download.qt.io/archive/qt/5.12/$($(package)_version)/submodules
 $(package)_suffix=everywhere-src-$($(package)_version).tar.xz
 $(package)_file_name=qtbase-$($(package)_suffix)
-$(package)_sha256_hash=1c1b4e33137ca77881074c140d54c3c9747e845a31338cfe8680f171f0bc3a39
+$(package)_sha256_hash=7c15c31590b6ec12408242b1a32075d1d545f35e1d41fdbad31ec670d00680f2
 $(package)_dependencies=openssl zlib
 $(package)_linux_dependencies=freetype fontconfig libxcb libxkbcommon
 $(package)_qt_libs=corelib network widgets gui plugins testlib concurrent
@@ -18,10 +18,10 @@ $(package)_patches+= fix_montery_include.patch
 
 # Update OSX_QT_TRANSLATIONS when this is updated
 $(package)_qttranslations_file_name=qttranslations-$($(package)_suffix)
-$(package)_qttranslations_sha256_hash=577b0668a777eb2b451c61e8d026d79285371597ce9df06b6dee6c814164b7c3
+$(package)_qttranslations_sha256_hash=b0f7f060ec5fd7b0d3de3df4db2f6c9e93ec70e0d2b5406d4d9024bc79da6023
 
 $(package)_qttools_file_name=qttools-$($(package)_suffix)
-$(package)_qttools_sha256_hash=98b2aaca230458f65996f3534fd471d2ffd038dd58ac997c0589c06dc2385b4f
+$(package)_qttools_sha256_hash=33897d94f4d8f5c5b88f78d61759f774e0d12c1aec3fc001b2a418eea77f4263
 
 $(package)_extra_sources  = $($(package)_qttranslations_file_name)
 $(package)_extra_sources += $($(package)_qttools_file_name)
