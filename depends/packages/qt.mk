@@ -28,7 +28,14 @@ $(package)_extra_sources += $($(package)_qttools_file_name)
 
 define $(package)_set_vars
 $(package)_config_env = QT_MAC_SDK_NO_VERSION_CHECK=1
-$(package)_config_env += OPENSSL_LIBS="-lssl -lcrypto -lpthread -lws2_32 -lgdi32"
+# OPENSSL_LIBS is consumed by Qt's "openssl" config test and the network module link.
+# It must be host-specific: -lws2_32/-lgdi32 exist only on Windows (mingw), so applying
+# them to every host made Qt's OpenSSL link test fail on Linux/macOS ("cannot find
+# -lws2_32"), which set libs.openssl=no and aborted with "Feature 'openssl-linked' ...
+# pre-condition ... libs.openssl failed". Split per host; the mingw value is unchanged.
+$(package)_config_env_mingw32 += OPENSSL_LIBS="-lssl -lcrypto -lpthread -lws2_32 -lgdi32"
+$(package)_config_env_linux += OPENSSL_LIBS="-lssl -lcrypto -lpthread -ldl"
+$(package)_config_env_darwin += OPENSSL_LIBS="-lssl -lcrypto"
 $(package)_config_opts_release = -release
 $(package)_config_opts_release += -silent
 $(package)_config_opts_debug = -debug
