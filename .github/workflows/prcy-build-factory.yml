@@ -33,7 +33,7 @@ jobs:
           build-essential g++ make autoconf automake libtool pkg-config cmake bison \
           python3 python3-setuptools patch xz-utils bzip2 unzip zip bsdmainutils file \
           clang llvm imagemagick gettext \
-          libtinfo5 zlib1g-dev libbz2-dev xorriso
+          libtinfo5 zlib1g-dev libbz2-dev xorriso zstd
     - name: Checkout
       uses: actions/checkout@v5
     - name: Ensure version.txt Exists
@@ -64,8 +64,22 @@ jobs:
         mkdir -p $ARTIFACT_DIR
         touch prcycoin.tar.gz
         tar -czf prcycoin.tar.gz --exclude=prcycoin.tar.gz .
+    - name: Restore Depends Sources Cache
+      id: sources-cache
+      uses: actions/cache/restore@v5
+      with:
+        path: depends/sources
+        key: depends-sources-${{ hashFiles('depends/packages/**', 'depends/*.mk') }}
+        restore-keys: |
+          depends-sources-
     - name: Download Dependencies
       run: make -C depends download
+    - name: Save Depends Sources Cache
+      if: always() && steps.sources-cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v5
+      with:
+        path: depends/sources
+        key: ${{ steps.sources-cache.outputs.cache-primary-key }}
     - name: Create Dependencies Tarball
       run: tar -czf depends.tar.gz depends
     - name: Prepare Files for Artifact
@@ -94,7 +108,7 @@ jobs:
           build-essential g++ make autoconf automake libtool pkg-config cmake bison \
           python3 python3-setuptools patch xz-utils bzip2 unzip zip bsdmainutils file \
           clang llvm imagemagick gettext \
-          libtinfo5 zlib1g-dev libbz2-dev xorriso
+          libtinfo5 zlib1g-dev libbz2-dev xorriso zstd
     - name: Getting Source
       uses: actions/download-artifact@v7
       with:
@@ -120,9 +134,23 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y python3-zmq
+    - name: Restore Dependencies Cache
+      id: depends-cache
+      uses: actions/cache/restore@v5
+      with:
+        path: ${{ env.SOURCE_ARTIFACT }}/depends/built
+        key: depends-built-x86_64-pc-linux-gnu-${{ hashFiles('source/depends/packages/**', 'source/depends/patches/**', 'source/depends/*.mk') }}
+        restore-keys: |
+          depends-built-x86_64-pc-linux-gnu-
     - name: Build Dependencies
       run: make -C depends -j$(nproc)
       working-directory: ${{ env.SOURCE_ARTIFACT }}
+    - name: Save Dependencies Cache
+      if: always() && steps.depends-cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v5
+      with:
+        path: ${{ env.SOURCE_ARTIFACT }}/depends/built
+        key: ${{ steps.depends-cache.outputs.cache-primary-key }}
     - name: Build PRCY 
       run: |
         ./autogen.sh
@@ -157,7 +185,7 @@ jobs:
           build-essential g++ make autoconf automake libtool pkg-config cmake bison \
           python3 python3-setuptools patch xz-utils bzip2 unzip zip bsdmainutils file \
           clang llvm imagemagick gettext \
-          libtinfo5 zlib1g-dev libbz2-dev xorriso
+          libtinfo5 zlib1g-dev libbz2-dev xorriso zstd
     - name: Getting Source
       uses: actions/download-artifact@v7
       with:
@@ -187,9 +215,23 @@ jobs:
       run: |
         sudo update-alternatives --set x86_64-w64-mingw32-gcc /usr/bin/x86_64-w64-mingw32-gcc-posix
         sudo update-alternatives --set x86_64-w64-mingw32-g++ /usr/bin/x86_64-w64-mingw32-g++-posix
+    - name: Restore Dependencies Cache
+      id: depends-cache
+      uses: actions/cache/restore@v5
+      with:
+        path: ${{ env.SOURCE_ARTIFACT }}/depends/built
+        key: depends-built-x86_64-w64-mingw32-${{ hashFiles('source/depends/packages/**', 'source/depends/patches/**', 'source/depends/*.mk') }}
+        restore-keys: |
+          depends-built-x86_64-w64-mingw32-
     - name: Build Dependencies
       run: make -C depends -j$(nproc) HOST=x86_64-w64-mingw32
       working-directory: ${{ env.SOURCE_ARTIFACT }}
+    - name: Save Dependencies Cache
+      if: always() && steps.depends-cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v5
+      with:
+        path: ${{ env.SOURCE_ARTIFACT }}/depends/built
+        key: ${{ steps.depends-cache.outputs.cache-primary-key }}
     - name: Build PRCY
       run: |
         ./autogen.sh
@@ -225,7 +267,7 @@ jobs:
           build-essential g++ make autoconf automake libtool pkg-config cmake bison \
           python3 python3-setuptools patch xz-utils bzip2 unzip zip bsdmainutils file \
           clang llvm imagemagick gettext \
-          libtinfo5 zlib1g-dev libbz2-dev xorriso
+          libtinfo5 zlib1g-dev libbz2-dev xorriso zstd
     - name: Getting Source
       uses: actions/download-artifact@v7
       with:
@@ -269,9 +311,23 @@ jobs:
           tar -C "depends/SDKs" -xf "${{ env.OSX_SDK_PATH }}"
         fi
       working-directory: ${{ env.SOURCE_ARTIFACT }}
+    - name: Restore Dependencies Cache
+      id: depends-cache
+      uses: actions/cache/restore@v5
+      with:
+        path: ${{ env.SOURCE_ARTIFACT }}/depends/built
+        key: depends-built-x86_64-apple-darwin16-${{ hashFiles('source/depends/packages/**', 'source/depends/patches/**', 'source/depends/*.mk') }}
+        restore-keys: |
+          depends-built-x86_64-apple-darwin16-
     - name: Build Dependencies
       run: make -C depends HOST=x86_64-apple-darwin16 -j$(nproc)
       working-directory: ${{ env.SOURCE_ARTIFACT }}
+    - name: Save Dependencies Cache
+      if: always() && steps.depends-cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v5
+      with:
+        path: ${{ env.SOURCE_ARTIFACT }}/depends/built
+        key: ${{ steps.depends-cache.outputs.cache-primary-key }}
     - name: Build PRCY
       run: |
         ./autogen.sh
@@ -305,7 +361,7 @@ jobs:
           build-essential g++ make autoconf automake libtool pkg-config cmake bison \
           python3 python3-setuptools patch xz-utils bzip2 unzip zip bsdmainutils file \
           clang llvm imagemagick gettext \
-          libtinfo5 zlib1g-dev libbz2-dev xorriso
+          libtinfo5 zlib1g-dev libbz2-dev xorriso zstd
     - name: Getting Source
       uses: actions/download-artifact@v7
       with:
@@ -331,9 +387,23 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y python3-zmq g++-aarch64-linux-gnu
+    - name: Restore Dependencies Cache
+      id: depends-cache
+      uses: actions/cache/restore@v5
+      with:
+        path: ${{ env.SOURCE_ARTIFACT }}/depends/built
+        key: depends-built-aarch64-linux-gnu-${{ hashFiles('source/depends/packages/**', 'source/depends/patches/**', 'source/depends/*.mk') }}
+        restore-keys: |
+          depends-built-aarch64-linux-gnu-
     - name: Build Dependencies
       run: make -C depends HOST=aarch64-linux-gnu -j$(nproc)
       working-directory: ${{ env.SOURCE_ARTIFACT }}
+    - name: Save Dependencies Cache
+      if: always() && steps.depends-cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v5
+      with:
+        path: ${{ env.SOURCE_ARTIFACT }}/depends/built
+        key: ${{ steps.depends-cache.outputs.cache-primary-key }}
     - name: Build PRCY
       run: |
         ./autogen.sh
@@ -367,7 +437,7 @@ jobs:
           build-essential g++ make autoconf automake libtool pkg-config cmake bison \
           python3 python3-setuptools patch xz-utils bzip2 unzip zip bsdmainutils file \
           clang llvm imagemagick gettext \
-          libtinfo5 zlib1g-dev libbz2-dev xorriso
+          libtinfo5 zlib1g-dev libbz2-dev xorriso zstd
     - name: Getting Source
       uses: actions/download-artifact@v7
       with:
@@ -393,9 +463,23 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y g++-arm-linux-gnueabihf
+    - name: Restore Dependencies Cache
+      id: depends-cache
+      uses: actions/cache/restore@v5
+      with:
+        path: ${{ env.SOURCE_ARTIFACT }}/depends/built
+        key: depends-built-arm-linux-gnueabihf-${{ hashFiles('source/depends/packages/**', 'source/depends/patches/**', 'source/depends/*.mk') }}
+        restore-keys: |
+          depends-built-arm-linux-gnueabihf-
     - name: Build Dependencies
       run: make -C depends -j$(nproc) HOST=arm-linux-gnueabihf
       working-directory: ${{ env.SOURCE_ARTIFACT }}
+    - name: Save Dependencies Cache
+      if: always() && steps.depends-cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v5
+      with:
+        path: ${{ env.SOURCE_ARTIFACT }}/depends/built
+        key: ${{ steps.depends-cache.outputs.cache-primary-key }}
     - name: Build PRCY
       run: |
         ./autogen.sh
@@ -429,7 +513,7 @@ jobs:
           build-essential g++ make autoconf automake libtool pkg-config cmake bison \
           python3 python3-setuptools patch xz-utils bzip2 unzip zip bsdmainutils file \
           clang llvm imagemagick gettext \
-          libtinfo5 zlib1g-dev libbz2-dev xorriso
+          libtinfo5 zlib1g-dev libbz2-dev xorriso zstd
     - name: Getting Source
       uses: actions/download-artifact@v7
       with:
@@ -455,9 +539,23 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y g++-riscv64-linux-gnu binutils-riscv64-linux-gnu
+    - name: Restore Dependencies Cache
+      id: depends-cache
+      uses: actions/cache/restore@v5
+      with:
+        path: ${{ env.SOURCE_ARTIFACT }}/depends/built
+        key: depends-built-riscv64-linux-gnu-noqt-${{ hashFiles('source/depends/packages/**', 'source/depends/patches/**', 'source/depends/*.mk') }}
+        restore-keys: |
+          depends-built-riscv64-linux-gnu-noqt-
     - name: Build Dependencies
       run: make -C depends -j$(nproc) HOST=riscv64-linux-gnu NO_QT=1
       working-directory: ${{ env.SOURCE_ARTIFACT }}
+    - name: Save Dependencies Cache
+      if: always() && steps.depends-cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v5
+      with:
+        path: ${{ env.SOURCE_ARTIFACT }}/depends/built
+        key: ${{ steps.depends-cache.outputs.cache-primary-key }}
     - name: Build PRCY
       run: |
         ./autogen.sh
