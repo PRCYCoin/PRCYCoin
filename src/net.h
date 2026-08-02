@@ -316,6 +316,9 @@ public:
     uint64_t nSendBytes;
     std::deque<CSerializeData> vSendMsg;
     RecursiveMutex cs_vSend;
+    // Guards hSocket. Always the innermost lock: it may be taken while holding
+    // cs_vSend or cs_vRecvMsg, never the other way around.
+    RecursiveMutex cs_hSocket;
 
     RecursiveMutex cs_sendProcessing;
 
