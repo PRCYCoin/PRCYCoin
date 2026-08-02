@@ -270,6 +270,12 @@ bool CWallet::SetHDChain(const CHDChain& chain, bool memonly)
     if (!memonly && !CWalletDB(strWalletFile).WriteHDChain(chain))
         throw std::runtime_error(std::string(__func__) + ": WriteHDChain failed");
 
+    // The HD seed changed, so any cached master keys are no longer valid.
+    masterSpendKeyCache = CKey();
+    masterViewKeyCache = CKey();
+    fMasterSpendKeyCached = false;
+    fMasterViewKeyCached = false;
+
     return true;
 }
 
@@ -590,6 +596,15 @@ bool CWallet::Lock()
     {
         LOCK(cs_KeyStore);
         vMasterKey.clear();
+    }
+
+    {
+        // Drop the cached master private keys when the wallet is locked.
+        LOCK(cs_wallet);
+        masterSpendKeyCache = CKey();
+        masterViewKeyCache = CKey();
+        fMasterSpendKeyCached = false;
+        fMasterViewKeyCached = false;
     }
 
     NotifyStatusChanged(this);
@@ -2052,7 +2067,12 @@ bool CWallet::DeleteWalletTransactions(const CBlockIndex* pindex, bool fRescan)
         LogPrint(BCLog::DELETETX,"DeleteTx - Time to Delete %s\n", DateTimeStrFormat("%H:%M:%S", deleteTime - selectTime));
         LogPrintf("DeleteTx - Total Transaction Count %i, Transactions Deleted %i\n", txCount, int(removeTxs.size()));
 
-        if (runCompact) {
+        // Do NOT compact during a rescan. CDBEnv::Compact deletes the shared Db
+        // handle (without consulting mapFileUseCount) and is expensive; running
+        // it every fDeleteInterval blocks needlessly stresses an environment
+        // that is already under heavy load. Compaction still runs during normal
+        // (non-rescan) transaction deletion.
+        if (runCompact && !fRescan) {
             CWalletDB::Compact(bitdb,strWalletFile);
         }
 
@@ -2108,6 +2128,18 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
             if (pindex->nHeight % fDeleteInterval == 0)
                 while(DeleteWalletTransactions(pindex, true)) {}
 
+            // Periodically checkpoint the wallet database during a long rescan.
+            // ThreadFlushWalletDB only checkpoints after ~2s with no wallet
+            // updates and no open handles - a window that never occurs while a
+            // large wallet is rescanning. Without checkpoints the BerkeleyDB
+            // transaction log grows without bound until the environment panics
+            // (DB_RUNRECOVERY). Forcing a checkpoint here flushes the log and,
+            // together with DB_LOG_AUTO_REMOVE, trims it so the env stays healthy.
+            if (pindex->nHeight % 1000 == 0) {
+                LOCK(bitdb.cs_db);
+                bitdb.dbenv->txn_checkpoint(0, 0, 0);
+            }
+
             pindex = chainActive.Next(pindex);
             if (GetTime() >= nNow + 60) {
                 nNow = GetTime();
@@ -2121,6 +2153,12 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
         ShowProgress(_("Rescanning... Please do not interrupt this process as it could lead to a corrupt wallet."), 100); // hide progress dialog in GUI
         //Delete transactions
         while(DeleteWalletTransactions(chainActive.Tip(), true)) {}
+        // Final checkpoint so the transaction log accumulated during the rescan
+        // is flushed and trimmed before the wallet resumes normal operation.
+        {
+            LOCK(bitdb.cs_db);
+            bitdb.dbenv->txn_checkpoint(0, 0, 0);
+        }
     }
     return ret;
 }
@@ -4809,6 +4847,10 @@ void CWallet::CreatePrivacyAccount(bool forceNew)
             walletdb.AppendStealthAccountList("masteraccount");
             break;
         }
+        // The spend/view accounts may have just been (re)generated, so drop any
+        // cached master keys; they will be re-read on next use.
+        fMasterSpendKeyCached = false;
+        fMasterViewKeyCached = false;
     }
 }
 
@@ -7015,6 +7057,10 @@ bool CWallet::mySpendPrivateKey(CKey& spend) const
             LogPrintf("%s: Wallet is locked\n", __func__);
             return false;
         }
+        if (fMasterSpendKeyCached) {
+            spend = masterSpendKeyCache;
+            return true;
+        }
         std::string spendAccountLabel = "spendaccount";
         CAccount spendAccount;
         CWalletDB pDB(strWalletFile);
@@ -7025,6 +7071,10 @@ bool CWallet::mySpendPrivateKey(CKey& spend) const
         }
         const CKeyID& keyID = spendAccount.vchPubKey.GetID();
         GetKey(keyID, spend);
+        if (spend.IsValid()) {
+            masterSpendKeyCache = spend;
+            fMasterSpendKeyCached = true;
+        }
     }
     return true;
 }
@@ -7036,6 +7086,10 @@ bool CWallet::myViewPrivateKey(CKey& view) const
             LogPrintf("%s: Wallet is locked\n", __func__);
             return false;
         }
+        if (fMasterViewKeyCached) {
+            view = masterViewKeyCache;
+            return true;
+        }
         std::string viewAccountLabel = "viewaccount";
         CAccount viewAccount;
         CWalletDB pDB(strWalletFile);
@@ -7046,6 +7100,10 @@ bool CWallet::myViewPrivateKey(CKey& view) const
         }
         const CKeyID& keyID = viewAccount.vchPubKey.GetID();
         GetKey(keyID, view);
+        if (view.IsValid()) {
+            masterViewKeyCache = view;
+            fMasterViewKeyCached = true;
+        }
     }
     return true;
 }
