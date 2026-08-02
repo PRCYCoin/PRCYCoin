@@ -4083,6 +4083,20 @@ bool CWallet::selectDecoysAndRealIndex(CTransaction& tx, int& myIndex, int ringS
             }
         }
     }
+    // Snapshot the decoy pools once, before the per-input loop, into vectors.
+    // Picking a decoy previously used std::next(map.begin(), rand % size), which
+    // is O(size) on a std::map and was executed for every decoy of every input;
+    // indexing a vector is O(1). The merged (user + coinbase) set is also built
+    // a single time here instead of being copied for every input. The pools do
+    // not change during selection, so this is behaviour-preserving - the same
+    // element at ordinal position k is selected, just far more cheaply.
+    std::vector<std::pair<COutPoint, uint256> > coinbaseDecoys(coinbaseDecoysPool.begin(), coinbaseDecoysPool.end());
+    std::vector<std::pair<COutPoint, uint256> > mergedDecoys;
+    {
+        std::map<COutPoint, uint256> mergedMap = userDecoysPool;
+        mergedMap.insert(coinbaseDecoysPool.begin(), coinbaseDecoysPool.end());
+        mergedDecoys.assign(mergedMap.begin(), mergedMap.end());
+    }
     //Choose decoys
     myIndex = -1;
     for (size_t i = 0; i < tx.vin.size(); i++) {
@@ -4124,17 +4138,23 @@ bool CWallet::selectDecoysAndRealIndex(CTransaction& tx, int& myIndex, int ringS
         pendingKeyImages.push_back(ki.GetHex());
         int numDecoys = 0;
         if (txPrev.IsCoinAudit() || txPrev.IsCoinBase() || txPrev.IsCoinStake()) {
-            if ((int)coinbaseDecoysPool.size() >= ringSize * 5) {
+            if ((int)coinbaseDecoys.size() >= ringSize * 5) {
+                size_t attempts = 0;
+                const size_t maxAttempts = (size_t)ringSize * 5000;
                 while (numDecoys < ringSize) {
+                    if (++attempts > maxAttempts) {
+                        LogPrintf("Could not find enough usable coinbase decoys. Please wait approximately 10 minutes and try again.\n");
+                        return false;
+                    }
                     bool duplicated = false;
                     bool invalid = false;
-                    std::map<COutPoint, uint256>::const_iterator it = std::next(coinbaseDecoysPool.begin(), secp256k1_rand32() % coinbaseDecoysPool.size());
-                    if (mapBlockIndex.count(it->second) < 1) continue;
-                    CBlockIndex* atTheblock = mapBlockIndex[it->second];
+                    const std::pair<COutPoint, uint256>& entry = coinbaseDecoys[secp256k1_rand32() % coinbaseDecoys.size()];
+                    if (mapBlockIndex.count(entry.second) < 1) continue;
+                    CBlockIndex* atTheblock = mapBlockIndex[entry.second];
                     if (!atTheblock || !chainActive.Contains(atTheblock)) continue;
                     if (!chainActive.Contains(atTheblock)) continue;
                     if (1 + chainActive.Height() - atTheblock->nHeight < DecoyConfirmationMinimum) continue;
-                    COutPoint outpoint = it->first;
+                    COutPoint outpoint = entry.first;
                     for (size_t d = 0; d < tx.vin[i].decoys.size(); d++) {
                         if (tx.vin[i].decoys[d] == outpoint) {
                             duplicated = true;
@@ -4152,15 +4172,15 @@ bool CWallet::selectDecoysAndRealIndex(CTransaction& tx, int& myIndex, int ringS
                     tx.vin[i].decoys.push_back(outpoint);
                     numDecoys++;
                 }
-            } else if ((int)coinbaseDecoysPool.size() >= ringSize) {
-                for (size_t j = 0; j < coinbaseDecoysPool.size(); j++) {
-                    std::map<COutPoint, uint256>::const_iterator it = std::next(coinbaseDecoysPool.begin(), j);
-                    if (mapBlockIndex.count(it->second) < 1) continue;
-                    CBlockIndex* atTheblock = mapBlockIndex[it->second];
+            } else if ((int)coinbaseDecoys.size() >= ringSize) {
+                for (size_t j = 0; j < coinbaseDecoys.size(); j++) {
+                    const std::pair<COutPoint, uint256>& entry = coinbaseDecoys[j];
+                    if (mapBlockIndex.count(entry.second) < 1) continue;
+                    CBlockIndex* atTheblock = mapBlockIndex[entry.second];
                     if (!atTheblock || !chainActive.Contains(atTheblock)) continue;
                     if (!chainActive.Contains(atTheblock)) continue;
                     if (1 + chainActive.Height() - atTheblock->nHeight < DecoyConfirmationMinimum) continue;
-                    COutPoint outpoint = it->first;
+                    COutPoint outpoint = entry.first;
                     if (!ValidOutPoint(outpoint)) {
                         break;
                     }
@@ -4173,19 +4193,23 @@ bool CWallet::selectDecoysAndRealIndex(CTransaction& tx, int& myIndex, int ringS
                 return false;
             }
         } else {
-            std::map<COutPoint, uint256> decoySet = userDecoysPool;
-            decoySet.insert(coinbaseDecoysPool.begin(), coinbaseDecoysPool.end());
-            if ((int)decoySet.size() >= ringSize * 5) {
+            if ((int)mergedDecoys.size() >= ringSize * 5) {
+                size_t attempts = 0;
+                const size_t maxAttempts = (size_t)ringSize * 5000;
                 while (numDecoys < ringSize) {
+                    if (++attempts > maxAttempts) {
+                        LogPrintf("Could not find enough usable decoys. Please wait approximately 10 minutes and try again.\n");
+                        return false;
+                    }
                     bool duplicated = false;
                     bool invalid = false;
-                    std::map<COutPoint, uint256>::const_iterator it = std::next(decoySet.begin(), secp256k1_rand32() % decoySet.size());
-                    if (mapBlockIndex.count(it->second) < 1) continue;
-                    CBlockIndex* atTheblock = mapBlockIndex[it->second];
+                    const std::pair<COutPoint, uint256>& entry = mergedDecoys[secp256k1_rand32() % mergedDecoys.size()];
+                    if (mapBlockIndex.count(entry.second) < 1) continue;
+                    CBlockIndex* atTheblock = mapBlockIndex[entry.second];
                     if (!atTheblock || !chainActive.Contains(atTheblock)) continue;
                     if (!chainActive.Contains(atTheblock)) continue;
                     if (1 + chainActive.Height() - atTheblock->nHeight < DecoyConfirmationMinimum) continue;
-                    COutPoint outpoint = it->first;
+                    COutPoint outpoint = entry.first;
                     for (size_t d = 0; d < tx.vin[i].decoys.size(); d++) {
                         if (tx.vin[i].decoys[d] == outpoint) {
                             duplicated = true;
@@ -4203,15 +4227,15 @@ bool CWallet::selectDecoysAndRealIndex(CTransaction& tx, int& myIndex, int ringS
                     tx.vin[i].decoys.push_back(outpoint);
                     numDecoys++;
                 }
-            } else if ((int)decoySet.size() >= ringSize) {
-                for (size_t j = 0; j < decoySet.size(); j++) {
-                    std::map<COutPoint, uint256>::const_iterator it = std::next(decoySet.begin(), j);
-                    if (mapBlockIndex.count(it->second) < 1) continue;
-                    CBlockIndex* atTheblock = mapBlockIndex[it->second];
+            } else if ((int)mergedDecoys.size() >= ringSize) {
+                for (size_t j = 0; j < mergedDecoys.size(); j++) {
+                    const std::pair<COutPoint, uint256>& entry = mergedDecoys[j];
+                    if (mapBlockIndex.count(entry.second) < 1) continue;
+                    CBlockIndex* atTheblock = mapBlockIndex[entry.second];
                     if (!atTheblock || !chainActive.Contains(atTheblock)) continue;
                     if (!chainActive.Contains(atTheblock)) continue;
                     if (1 + chainActive.Height() - atTheblock->nHeight < DecoyConfirmationMinimum) continue;
-                    COutPoint outpoint = it->first;
+                    COutPoint outpoint = entry.first;
                     if (!ValidOutPoint(outpoint)) {
                         break;
                     }
