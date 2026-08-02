@@ -1998,11 +1998,21 @@ public:
             if (!CloseSocket(hListenSocket.socket))
                 LogPrintf("CloseSocket(hListenSocket) failed with error %s\n", NetworkErrorString(WSAGetLastError()));
 
-        // clean up some globals (to help leak detection)
-        for (CNode * pnode : vNodes)
-        delete pnode;
-        for (CNode * pnode : vNodesDisconnected)
-        delete pnode;
+        // The CNode objects are deliberately NOT deleted here.
+        //
+        // This destructor runs both as a static destructor and, via
+        // CExplicitNetCleanup::callCleanup(), when the wallet is restarted from within
+        // itself -- in neither case is there any guarantee that the network threads have
+        // finished. Deleting a CNode destroys its mutexes; a thread still inside
+        // ThreadSocketHandler or ThreadMessageHandler then locks a destroyed mutex, which
+        // boost reports as
+        //     mutex lock failed in pthread_mutex_lock: Invalid argument
+        // and terminates the process. That abnormal exit also denies BerkeleyDB a clean
+        // close, so wallet.dat can need recovery on the next start.
+        //
+        // These deletes existed only "to help leak detection". On process exit the memory
+        // is reclaimed anyway; on the in-wallet restart path this leaks one set of CNode
+        // objects per restart, which is bounded and far cheaper than terminating.
         vNodes.clear();
         vNodesDisconnected.clear();
         vhListenSocket.clear();
