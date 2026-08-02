@@ -4163,6 +4163,12 @@ bool CWallet::selectDecoysAndRealIndex(CTransaction& tx, int& myIndex, int ringS
                     if (!chainActive.Contains(atTheblock)) continue;
                     if (1 + chainActive.Height() - atTheblock->nHeight < DecoyConfirmationMinimum) continue;
                     COutPoint outpoint = entry.first;
+                    // Never use the real output being spent as one of its own decoys:
+                    // after the myIndex swap below it would appear twice in this input's
+                    // ring, which both leaks the real input (it is the duplicate) and can
+                    // make the ring signature invalid. Skip it and draw another candidate.
+                    if (outpoint == tx.vin[i].prevout)
+                        continue;
                     for (size_t d = 0; d < tx.vin[i].decoys.size(); d++) {
                         if (tx.vin[i].decoys[d] == outpoint) {
                             duplicated = true;
@@ -4203,6 +4209,10 @@ bool CWallet::selectDecoysAndRealIndex(CTransaction& tx, int& myIndex, int ringS
                     if (!chainActive.Contains(atTheblock)) continue;
                     if (1 + chainActive.Height() - atTheblock->nHeight < DecoyConfirmationMinimum) continue;
                     COutPoint outpoint = entry.first;
+                    // Never use the real output being spent as one of its own decoys
+                    // (see the large-pool branch above): it would duplicate the real
+                    // input in this input's ring after the myIndex swap.
+                    if (outpoint == tx.vin[i].prevout) continue;
                     if (!ValidOutPoint(outpoint)) continue;
                     tx.vin[i].decoys.push_back(outpoint);
                     numDecoys++;
@@ -4229,6 +4239,12 @@ bool CWallet::selectDecoysAndRealIndex(CTransaction& tx, int& myIndex, int ringS
                     if (!chainActive.Contains(atTheblock)) continue;
                     if (1 + chainActive.Height() - atTheblock->nHeight < DecoyConfirmationMinimum) continue;
                     COutPoint outpoint = entry.first;
+                    // Never use the real output being spent as one of its own decoys:
+                    // after the myIndex swap below it would appear twice in this input's
+                    // ring, which both leaks the real input (it is the duplicate) and can
+                    // make the ring signature invalid. Skip it and draw another candidate.
+                    if (outpoint == tx.vin[i].prevout)
+                        continue;
                     for (size_t d = 0; d < tx.vin[i].decoys.size(); d++) {
                         if (tx.vin[i].decoys[d] == outpoint) {
                             duplicated = true;
@@ -4263,6 +4279,10 @@ bool CWallet::selectDecoysAndRealIndex(CTransaction& tx, int& myIndex, int ringS
                     if (!chainActive.Contains(atTheblock)) continue;
                     if (1 + chainActive.Height() - atTheblock->nHeight < DecoyConfirmationMinimum) continue;
                     COutPoint outpoint = entry.first;
+                    // Never use the real output being spent as one of its own decoys
+                    // (see the large-pool branch above): it would duplicate the real
+                    // input in this input's ring after the myIndex swap.
+                    if (outpoint == tx.vin[i].prevout) continue;
                     if (!ValidOutPoint(outpoint)) continue;
                     tx.vin[i].decoys.push_back(outpoint);
                     numDecoys++;
