@@ -105,6 +105,12 @@ bool CDBEnv::Open(const fs::path& pathIn)
         S_IRUSR | S_IWUSR);
     if (ret != 0) {
         dbenv->close(0);
+        // A DbEnv handle must not be used after close(). AppInit retries this Open
+        // (after moving "database" aside) when it fails, and without a fresh handle the
+        // retry's first call, set_lg_dir(), runs on the closed one and crashes. Reset()
+        // deletes the closed handle and creates a new one, so the retry can work.
+        // (Backport of the first commit of Bitcoin Core PR #13161.)
+        Reset();
         return error("CDBEnv::Open : Error %d opening database environment: %s\n", ret, DbEnv::strerror(ret));
     }
 
