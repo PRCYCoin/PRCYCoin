@@ -264,7 +264,7 @@ void Misbehaving(NodeId nodeid, int howmuch) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 void FlushStateToDisk();
 
 
-CAmount GetValueIn(CCoinsViewCache view, const CTransaction& tx);
+bool GetValueIn(const CCoinsViewCache& view, const CTransaction& tx, CAmount& nResult);
 
 
 /** (try to) add transaction to memory pool **/

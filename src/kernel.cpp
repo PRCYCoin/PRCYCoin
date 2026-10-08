@@ -351,10 +351,13 @@ bool Stake(CStakeInput* stakeInput, unsigned int nBits, unsigned int nTimeBlockF
 bool CheckProofOfStake(const CBlock block, uint256& hashProofOfStake, std::unique_ptr<CStakeInput>& stake, int nPreviousBlockHeight)
 {
     const CTransaction tx = block.vtx[1]; //coinstake
-    CAmount nValueIn;
+    CAmount nValueIn = 0;
     CAmount nValueOut;
     CCoinsViewCache view(pcoinsTip);
-    nValueIn = GetValueIn(view, tx);
+    // nValueIn is the staked amount handed to CheckStake() below, so it must be known to be
+    // correct rather than whatever a partially-failed lookup left behind.
+    if (!GetValueIn(view, tx, nValueIn))
+        return error("%s : malformed inputs for coinstake %s", __func__, tx.GetHash().ToString());
     nValueOut = tx.GetValueOut();
 
     if (!tx.IsCoinStake())
