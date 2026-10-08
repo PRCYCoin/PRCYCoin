@@ -1308,7 +1308,13 @@ bool CWallet::AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pbl
         if (pblock && mapBlockIndex.count(pblock->GetHash()) == 1) {
             if (!IsLocked()) {
                 try {
-                    CWalletDB(strWalletFile).WriteScannedBlockHeight(mapBlockIndex[pblock->GetHash()]->nHeight);
+                    // fFlushOnClose=false: this runs once per transaction during a
+                    // rescan; the default (flush-on-close, non-read-only) handle would
+                    // force a full BerkeleyDB txn_checkpoint (fsync) on every close.
+                    // Not flushing here is safe - a crash just re-scans (same rationale
+                    // as AddToWallet below) - and the periodic rescan checkpoint covers
+                    // durability.
+                    CWalletDB(strWalletFile, "r+", false).WriteScannedBlockHeight(mapBlockIndex[pblock->GetHash()]->nHeight);
                 } catch (const std::exception& e) {
                     LogPrintf("Cannot open data base or wallet is locked\n");
                 }
@@ -2141,13 +2147,22 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
             }
 
             pindex = chainActive.Next(pindex);
+            // Past the tip: the scan is complete. Stop here rather than let the progress
+            // and abort messages below dereference the NULL pindex.
+            if (!pindex)
+                break;
             if (GetTime() >= nNow + 60) {
                 nNow = GetTime();
                 LogPrintf("Still rescanning. At block %d. Progress=%f\n", pindex->nHeight, Checkpoints::GuessVerificationProgress(pindex));
             }
             if (ShutdownRequested()) {
                 LogPrintf("Rescan aborted at block %d. Please rescanwallettransactions %f from the Debug Console to continue.\n", pindex->nHeight, pindex->nHeight);
-                return false;
+                // Return the cancellation sentinel (-1), NOT false/0. The caller in
+                // AppInit only treats -1 as an abort; a 0 return looks like a clean
+                // completion, so it would persist best-block = chain tip and skip the
+                // rest of the chain on the next start, silently losing any wallet
+                // activity in the unscanned tail.
+                return -1;
             }
         }
         ShowProgress(_("Rescanning... Please do not interrupt this process as it could lead to a corrupt wallet."), 100); // hide progress dialog in GUI
@@ -6416,12 +6431,16 @@ int CWalletTx::GetBlockHeight() const
 
 bool CWallet::ReadAccountList(std::string& accountList)
 {
-    return CWalletDB(strWalletFile).ReadStealthAccountList(accountList);
+    // Read-only, no flush-on-close. allMyPrivateKeys() calls this (and
+    // ReadStealthAccount below) once per transaction during a rescan; the default
+    // ("r+", flush-on-close) handle forces a full BerkeleyDB txn_checkpoint (fsync)
+    // on every close, which dominates rescan time on a large wallet.
+    return CWalletDB(strWalletFile, "r", false).ReadStealthAccountList(accountList);
 }
 
 bool CWallet::ReadStealthAccount(const std::string& strAccount, CStealthAccount& account)
 {
-    return CWalletDB(strWalletFile).ReadStealthAccount(strAccount, account);
+    return CWalletDB(strWalletFile, "r", false).ReadStealthAccount(strAccount, account);
 }
 
 bool CWallet::ComputeStealthPublicAddress(const std::string& accountName, std::string& pubAddress)
