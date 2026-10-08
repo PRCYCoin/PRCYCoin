@@ -3086,7 +3086,24 @@ UniValue erasewallettransactions(const UniValue& params, bool fHelp) {
     int initialCount = (int)pwalletMain->mapWallet.size();
     int newCount, removedTxes = 0;
 
-    pwalletMain->DeleteWalletTransactions(pindex, false);
+    // Loop until nothing more can be pruned. A single pass only removes txs whose
+    // parents are no longer in the wallet, so a long parent chain (e.g. a staking
+    // history) peels one generation per pass and needs many passes to fully
+    // cascade; the rescan path loops for the same reason.
+    //
+    // Pass fRescan=true so a BerkeleyDB compaction is NOT forced on every pass. A
+    // long chain can take thousands of passes, and compacting each one would mean
+    // thousands of fsync-heavy Compact() calls. Instead we loop cheaply and compact
+    // once at the end (mirroring the rescan path, which also loops with fRescan=true
+    // and checkpoints separately). This holds cs_main/cs_wallet for the duration, so
+    // a large backlog can take a while and blocks block processing until it finishes.
+    bool erasedAny = false;
+    while (pwalletMain->DeleteWalletTransactions(pindex, true)) {
+        erasedAny = true;
+        if (ShutdownRequested()) break;
+    }
+    if (erasedAny)
+        CWalletDB::Compact(bitdb, pwalletMain->strWalletFile);
 
     newCount = (int)pwalletMain->mapWallet.size();
     removedTxes = initialCount - newCount;
