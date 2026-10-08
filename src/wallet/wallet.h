@@ -641,6 +641,8 @@ public:
     void CreatePrivacyAccount(bool force = false);
     bool mySpendPrivateKey(CKey& spend) const;
     bool myViewPrivateKey(CKey& view) const;
+    //! Forget the cached master keys; call after writing an account record.
+    void ClearMasterKeyCache() const;
     static bool CreateCommitment(const CAmount val, CKey& blind, std::vector<unsigned char>& commitment);
     static bool CreateCommitment(const unsigned char* blind, CAmount val, std::vector<unsigned char>& commitment);
     static bool CreateCommitmentWithZeroBlind(const CAmount val, unsigned char* pBlind, std::vector<unsigned char>& commitment);
@@ -670,6 +672,16 @@ private:
     bool selectDecoysAndRealIndex(CTransaction& tx, int& myIndex, int ringSize);
     bool makeRingCT(CTransaction& wtxNew, int ringSize, std::string& strFailReason);
     int walletIdxCache = 0;
+    // Cache of the master spend/view private keys. A rescan needs them for every
+    // transaction it tests, and reading the account records from the wallet DB
+    // each time is slow and puts the DB under load. Filled only while unlocked.
+    // Cleared on Lock(), on a new HD chain, and by ClearMasterKeyCache() wherever an
+    // account record is written (importkeys, a regenerated account), since the
+    // records can then name different keys.
+    mutable CKey masterSpendKeyCache;
+    mutable CKey masterViewKeyCache;
+    mutable bool fMasterSpendKeyCached = false;
+    mutable bool fMasterViewKeyCached = false;
     bool isMatchMyKeyImage(const CKeyImage& ki, const COutPoint& out);
     void ScanWalletKeyImages();
 };

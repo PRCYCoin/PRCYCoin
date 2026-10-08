@@ -1711,6 +1711,19 @@ bool AppInit2(bool isDaemon)
                     pindexRescan = chainActive.Genesis();
             }
         }
+        // Read the master (spend/view) keys once, before a potentially very long
+        // rescan, so they are cached and created if missing while the database
+        // environment is fresh. The rescan tests every transaction against them, and
+        // each uncached read that failed under load made the wallet try to create the
+        // master keys again (mySpendPrivateKey -> createMasterKey -> AddHDPubKey);
+        // when that write failed too, it threw "AddHDPubKey failed" and AppInit
+        // aborted. Skipped for a locked wallet, whose keys cannot be read yet.
+        if (pwalletMain->IsHDEnabled() && !pwalletMain->IsLocked()) {
+            CKey masterKey;
+            pwalletMain->mySpendPrivateKey(masterKey);
+            pwalletMain->myViewPrivateKey(masterKey);
+        }
+
         if (chainActive.Tip() && chainActive.Tip() != pindexRescan) {
             uiInterface.InitMessage(_("Rescanning..."));
             LogPrintf("Rescanning last %i blocks (from block %i)...\n", chainActive.Height() - pindexRescan->nHeight, pindexRescan->nHeight);

@@ -154,6 +154,7 @@ CBitcoinAddress GetAccountAddress(std::string strAccount, bool bForceNew = false
 
         pwalletMain->SetAddressBook(account.vchPubKey.GetID(), strAccount, "receive");
         walletdb.WriteAccount(strAccount, account);
+        pwalletMain->ClearMasterKeyCache();
     }
 
     return CBitcoinAddress(account.vchPubKey.GetID());
@@ -194,6 +195,7 @@ CBitcoinAddress GetHDAccountAddress(std::string strAccount, uint32_t nAccountInd
 
         pwalletMain->SetAddressBook(account.vchPubKey.GetID(), strAccount, "receive");
         walletdb.WriteAccount(strAccount, account);
+        pwalletMain->ClearMasterKeyCache();
     }
 
     return CBitcoinAddress(account.vchPubKey.GetID());
@@ -2681,6 +2683,7 @@ UniValue importkeys(const UniValue& params, bool fHelp)
 
     pwalletMain->SetAddressBook(spendAc.vchPubKey.GetID(), spendAccountLabel, "receive");
     walletdb.WriteAccount(spendAccountLabel, spendAc);
+    pwalletMain->ClearMasterKeyCache();
 
     return true;
 }
