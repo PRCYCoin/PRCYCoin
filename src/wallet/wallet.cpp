@@ -1232,7 +1232,8 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn, bool fFromLoadWallet, CWalletD
         mapWallet[hash] = wtxIn;
         CWalletTx& wtx = mapWallet[hash];
         wtx.BindWallet(this);
-        wtxOrdered.insert(std::make_pair(wtx.nOrderPos, TxPair(&wtx, (CAccountingEntry*)0)));
+        wtx.itWtxOrdered = wtxOrdered.insert(std::make_pair(wtx.nOrderPos, TxPair(&wtx, (CAccountingEntry*)0)));
+        wtx.fInWtxOrdered = true;
         AddToSpends(hash);
     } else {
         LOCK(cs_wallet);
@@ -1245,7 +1246,8 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn, bool fFromLoadWallet, CWalletD
             if (!wtx.nTimeReceived)
                 wtx.nTimeReceived = GetAdjustedTime();
             wtx.nOrderPos = IncOrderPosNext(pwalletdb);
-            wtxOrdered.insert(std::make_pair(wtx.nOrderPos, TxPair(&wtx, (CAccountingEntry*)0)));
+            wtx.itWtxOrdered = wtxOrdered.insert(std::make_pair(wtx.nOrderPos, TxPair(&wtx, (CAccountingEntry*)0)));
+            wtx.fInWtxOrdered = true;
             wtx.nTimeSmart = ComputeTimeSmart(wtx);
             AddToSpends(hash);
         }
@@ -1358,10 +1360,27 @@ bool CWallet::EraseFromWallet(const uint256& hash)
         return false;
     {
         LOCK(cs_wallet);
-        if (mapWallet.erase(hash))
+        std::map<uint256, CWalletTx>::iterator it = mapWallet.find(hash);
+        if (it != mapWallet.end()) {
+            EraseFromWtxOrdered(it->second);
+            mapWallet.erase(it);
             return CWalletDB(strWalletFile).EraseTx(hash);
+        }
     }
     return false;
+}
+
+void CWallet::EraseFromWtxOrdered(CWalletTx& wtx)
+{
+    // wtxOrdered points straight at mapWallet elements. An entry left behind for an
+    // erased transaction is a dangling pointer that listtransactions and
+    // ComputeTimeSmart then read -- garbage, a crash, or "Out of memory" when a
+    // garbage size reaches an allocation.
+    AssertLockHeld(cs_wallet);
+    if (!wtx.fInWtxOrdered)
+        return;
+    wtxOrdered.erase(wtx.itWtxOrdered);
+    wtx.fInWtxOrdered = false;
 }
 
 
@@ -1915,6 +1934,14 @@ bool CWallet::DeleteTransactions(std::vector<uint256> &removeTxs, bool fRescan)
     }
 
     CWalletDB walletdb(strWalletFile, "r+", false);
+
+    // Drop their wtxOrdered entries before the loop erases them from mapWallet, so
+    // nothing is left pointing at freed transactions however the loop erases.
+    for (const uint256& hash : removeTxs) {
+        std::map<uint256, CWalletTx>::iterator it = mapWallet.find(hash);
+        if (it != mapWallet.end())
+            EraseFromWtxOrdered(it->second);
+    }
 
     for (int i = 0; i < removeTxs.size(); i++) {
         bool fRemoveFromSpends = !(mapWallet.at(removeTxs[i]).IsCoinBase());
