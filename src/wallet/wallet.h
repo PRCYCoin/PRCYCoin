@@ -670,6 +670,15 @@ private:
     bool selectDecoysAndRealIndex(CTransaction& tx, int& myIndex, int ringSize);
     bool makeRingCT(CTransaction& wtxNew, int ringSize, std::string& strFailReason);
     int walletIdxCache = 0;
+    // Cache of the HD master spend/view private keys. During a rescan these are
+    // needed to test every transaction; re-reading the account from the wallet
+    // DB and re-deriving the key for each transaction is both slow and a major
+    // source of BerkeleyDB load. They are constant for the life of the wallet,
+    // so cache them once (only while unlocked) and clear on Lock().
+    mutable CKey masterSpendKeyCache;
+    mutable CKey masterViewKeyCache;
+    mutable bool fMasterSpendKeyCached = false;
+    mutable bool fMasterViewKeyCached = false;
     bool isMatchMyKeyImage(const CKeyImage& ki, const COutPoint& out);
     void ScanWalletKeyImages();
 };

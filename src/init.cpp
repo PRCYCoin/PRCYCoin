@@ -1711,6 +1711,19 @@ bool AppInit2(bool isDaemon)
                     pindexRescan = chainActive.Genesis();
             }
         }
+        // Ensure the HD master (spend/view) account exists BEFORE starting a
+        // potentially very long rescan. Otherwise the first wallet output found
+        // mid-rescan lazily creates it (mySpendPrivateKey -> createMasterKey ->
+        // DeriveNewChildKey -> AddHDPubKey); if the BerkeleyDB environment is
+        // under load at that point the write fails and throws
+        // "DeriveNewChildKey: AddHDPubKey failed", aborting AppInit. Creating it
+        // up front, on a fresh/healthy environment, removes that fatal code path.
+        if (pwalletMain->IsHDEnabled() && !pwalletMain->IsLocked()) {
+            CKey masterKey;
+            pwalletMain->mySpendPrivateKey(masterKey);
+            pwalletMain->myViewPrivateKey(masterKey);
+        }
+
         if (chainActive.Tip() && chainActive.Tip() != pindexRescan) {
             uiInterface.InitMessage(_("Rescanning..."));
             LogPrintf("Rescanning last %i blocks (from block %i)...\n", chainActive.Height() - pindexRescan->nHeight, pindexRescan->nHeight);
