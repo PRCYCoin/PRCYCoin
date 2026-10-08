@@ -430,6 +430,16 @@ bool VerifyRingSignatureWithTxFee(const CTransaction& tx, CBlockIndex* pindex)
         return false; //maximum decoys = 15
     }
 
+    // The fixed-size arrays below are indexed by tx.vout.size(); bound it before they are
+    // filled. This is one looser than the output limit applied in VerifyBulletProofAggregate,
+    // so nothing previously accepted is rejected. Keep this below the IsInitialBlockDownload()
+    // return above, so it stays inert during IBD/reindex like that limit does.
+    if (tx.vout.size() > MAX_VOUT) {
+        LogPrintf("%s: too many outputs (%d, max %d) in tx %s\n", __func__,
+            tx.vout.size(), MAX_VOUT, tx.GetHash().GetHex());
+        return false;
+    }
+
     unsigned char allInPubKeys[MAX_VIN + 1][MAX_DECOYS + 1][33];
     unsigned char allKeyImages[MAX_VIN + 1][33];
     unsigned char allInCommitments[MAX_VIN][MAX_DECOYS + 1][33];
@@ -497,6 +507,19 @@ bool VerifyRingSignatureWithTxFee(const CTransaction& tx, CBlockIndex* pindex)
     }
     memcpy(allKeyImages[tx.vin.size()], tx.ntxFeeKeyImage.begin(), 33);
 
+    // S is read as one column per ring member, each with an entry per input plus one.
+    // Require at least that many; entries beyond them were never read and still aren't.
+    if (tx.S.size() < tx.vin[0].decoys.size() + 1) {
+        LogPrintf("%s: signature has too few columns in tx %s\n", __func__, tx.GetHash().GetHex());
+        return false;
+    }
+    for (size_t i = 0; i < tx.vin[0].decoys.size() + 1; i++) {
+        if (tx.S[i].size() < tx.vin.size() + 1) {
+            LogPrintf("%s: signature column %u too short in tx %s\n", __func__, (unsigned int)i, tx.GetHash().GetHex());
+            return false;
+        }
+    }
+
     for (size_t i = 0; i < tx.vin[0].decoys.size() + 1; i++) {
         std::vector<uint256> S_column = tx.S[i];
         for (size_t j = 0; j < tx.vin.size() + 1; j++) {
@@ -509,8 +532,10 @@ bool VerifyRingSignatureWithTxFee(const CTransaction& tx, CBlockIndex* pindex)
     secp256k1_pedersen_commitment allOutCommitmentsPacked[MAX_VOUT + 1]; //+1 for tx fee
 
     for (size_t i = 0; i < tx.vout.size(); i++) {
-        if (tx.vout[i].commitment.empty()) {
-            LogPrintf("Commitment can not be null\n");
+        // Fixed 33-byte copy: require at least that many bytes.
+        if (tx.vout[i].commitment.size() < 33) {
+            LogPrintf("%s: output commitment too short (%d bytes) in tx %s\n", __func__,
+                tx.vout[i].commitment.size(), tx.GetHash().GetHex());
             return false;
         }
         memcpy(allOutCommitments[i], &(tx.vout[i].commitment[0]), 33);
