@@ -84,7 +84,7 @@ bool CDBEnv::Open(const fs::path& pathIn)
         nEnvFlags |= DB_PRIVATE;
 
     dbenv->set_lg_dir(pathLogDir.string().c_str());
-    dbenv->set_cachesize(1, 0x100000, 1); // 1 MiB should be enough for just the wallet, Increased by 1 GB
+    dbenv->set_cachesize(0, 0x100000, 1); // 1 MiB, matching upstream (was 1 GiB, which exhausted 32-bit address space)
     dbenv->set_lg_bsize(0x10000);
     dbenv->set_lg_max(1048576);
     dbenv->set_lk_max_locks(40000);
@@ -105,6 +105,15 @@ bool CDBEnv::Open(const fs::path& pathIn)
         S_IRUSR | S_IWUSR);
     if (ret != 0) {
         dbenv->close(0);
+        // A DbEnv handle must NOT be reused after close(): per BerkeleyDB, once closed
+        // the handle is dead and any further use is undefined. The caller in AppInit
+        // retries this Open (after moving "database" aside) when it fails; without a
+        // fresh handle that retry operates on the closed dbenv and also fails, so the
+        // wallet aborts with "Error initializing wallet database environment" and only a
+        // full restart (new process => new handle) or deleting "database" recovers it.
+        // Reset() deletes the closed handle and creates a new one so the retry works.
+        // (Backport of Bitcoin Core PR #13161.)
+        Reset();
         return error("CDBEnv::Open : Error %d opening database environment: %s\n", ret, DbEnv::strerror(ret));
     }
 
