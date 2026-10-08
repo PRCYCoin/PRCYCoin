@@ -30,6 +30,10 @@
 
 #endif
 
+#ifdef USE_POLL
+#include <poll.h>
+#endif
+
 #ifdef USE_UPNP
 #include <miniupnpc/miniupnpc.h>
 #include <miniupnpc/upnpcommands.h>
@@ -39,12 +43,17 @@
 #include <boost/thread.hpp>
 
 #include <math.h>
+#include <set>
+#include <unordered_map>
 
 // Dump addresses to peers.dat and banlist.dat every 15 minutes (900s)
 #define DUMP_ADDRESSES_INTERVAL 900
 
 // We add a random period time (0 to 1 seconds) to feeler connections to prevent synchronization.
 #define FEELER_SLEEP_WINDOW 1
+
+// How long to block in select()/poll() before waking up to service pnode->vSendMsg.
+static const int SELECT_TIMEOUT_MILLISECONDS = 50;
 
 #if !defined(HAVE_MSG_NOSIGNAL) && !defined(MSG_NOSIGNAL)
 #define MSG_NOSIGNAL 0
@@ -1012,6 +1021,205 @@ static void AcceptConnection(const ListenSocket& hListenSocket) {
     }
 }
 
+/**
+ * Collect the sockets we want to wait on into three sets, keyed by what we want
+ * to hear about. Returns false if there is nothing at all to wait on, in which
+ * case the caller should just sleep out the timeout.
+ *
+ * Working in std::set<SOCKET> rather than fd_set is what lets the select() and
+ * poll() backends below share this function unchanged, and it is also what
+ * removes every FD_SET() call from the locked region: an fd only reaches an
+ * fd_set after it has been read out of a node under cs_hSocket and found valid.
+ */
+static bool GenerateSelectSet(std::set<SOCKET>& recv_set, std::set<SOCKET>& send_set, std::set<SOCKET>& error_set)
+{
+    for (const ListenSocket& hListenSocket : vhListenSocket) {
+        // At shutdown the listen sockets are closed (which sets them to
+        // INVALID_SOCKET, CloseSocket takes its argument by reference) before
+        // vhListenSocket is cleared, so an entry here can legitimately be -1.
+        // The accept loop below already guards for this; so must we.
+        if (hListenSocket.socket == INVALID_SOCKET)
+            continue;
+        recv_set.insert(hListenSocket.socket);
+    }
+
+    {
+        LOCK(cs_vNodes);
+        for (CNode* pnode : vNodes) {
+            // Decide what to wait for BEFORE touching hSocket, so that cs_vSend and
+            // cs_vRecvMsg are released again before cs_hSocket is taken. cs_hSocket is
+            // the innermost lock and must never be held while acquiring another.
+            //
+            // Implement the following logic:
+            // * If there is data to send, wait for the socket to become writable. As this
+            //   only happens when optimistic write failed, we choose to first drain the
+            //   write buffer in this case before receiving more. This avoids needlessly
+            //   queueing received data, if the remote peer is not themselves receiving
+            //   data. This means properly utilizing TCP flow control signalling.
+            // * Otherwise, if there is no (complete) message in the receive buffer,
+            //   or there is space left in the buffer, wait for the socket to become
+            //   readable.
+            // * (if neither of the above applies, there is certainly one message
+            //   in the receiver buffer ready to be processed).
+            // Together, that means that at least one of the following is always possible,
+            // so we don't deadlock:
+            // * We send some data.
+            // * We wait for data to be received (and disconnect after timeout).
+            // * We process a message in the buffer (message handler thread).
+            bool select_send;
+            {
+                LOCK(pnode->cs_vSend);
+                select_send = !pnode->vSendMsg.empty();
+            }
+            bool select_recv;
+            {
+                TRY_LOCK(pnode->cs_vRecvMsg, lockRecv);
+                select_recv = lockRecv && (pnode->vRecvMsg.empty() || !pnode->vRecvMsg.front().complete() ||
+                                           pnode->GetTotalRecvSize() <= ReceiveFloodSize());
+            }
+
+            LOCK(pnode->cs_hSocket);
+            if (pnode->hSocket == INVALID_SOCKET)
+                continue;
+
+            error_set.insert(pnode->hSocket);
+            if (select_send) {
+                send_set.insert(pnode->hSocket);
+                continue;
+            }
+            if (select_recv) {
+                recv_set.insert(pnode->hSocket);
+            }
+        }
+    }
+
+    return !recv_set.empty() || !send_set.empty() || !error_set.empty();
+}
+
+#ifdef USE_POLL
+/**
+ * poll() backend. Unlike select() it has no FD_SETSIZE ceiling, it does not have
+ * to rebuild a bitmask sized by the largest descriptor on every pass, and -- of
+ * direct relevance here -- a descriptor that was closed between GenerateSelectSet()
+ * and the wait simply comes back with POLLNVAL instead of tripping the fortified
+ * FD_SET()/FD_ISSET() bounds check.
+ */
+static void SocketEvents(std::set<SOCKET>& recv_set, std::set<SOCKET>& send_set, std::set<SOCKET>& error_set)
+{
+    std::set<SOCKET> recv_select_set, send_select_set, error_select_set;
+    if (!GenerateSelectSet(recv_select_set, send_select_set, error_select_set)) {
+        MilliSleep(SELECT_TIMEOUT_MILLISECONDS);
+        return;
+    }
+
+    std::unordered_map<SOCKET, struct pollfd> pollfds;
+    for (SOCKET socket_id : recv_select_set) {
+        pollfds[socket_id].fd = socket_id;
+        pollfds[socket_id].events |= POLLIN;
+    }
+
+    for (SOCKET socket_id : send_select_set) {
+        pollfds[socket_id].fd = socket_id;
+        pollfds[socket_id].events |= POLLOUT;
+    }
+
+    for (SOCKET socket_id : error_select_set) {
+        pollfds[socket_id].fd = socket_id;
+        // These flags are ignored on input, but we set them for clarity
+        pollfds[socket_id].events |= POLLERR | POLLHUP;
+    }
+
+    std::vector<struct pollfd> vpollfds;
+    vpollfds.reserve(pollfds.size());
+    for (auto& it : pollfds) {
+        vpollfds.push_back(it.second);
+    }
+
+    int r = poll(vpollfds.data(), vpollfds.size(), SELECT_TIMEOUT_MILLISECONDS);
+    if (r < 0) {
+        return;
+    }
+
+    for (const struct pollfd& pollfd_entry : vpollfds) {
+        if (pollfd_entry.revents & POLLIN)              recv_set.insert(pollfd_entry.fd);
+        if (pollfd_entry.revents & POLLOUT)             send_set.insert(pollfd_entry.fd);
+        if (pollfd_entry.revents & (POLLERR | POLLHUP)) error_set.insert(pollfd_entry.fd);
+    }
+}
+#else
+/**
+ * select() backend, used when poll() is unavailable (notably Windows). Behaviour
+ * is unchanged from before, but every descriptor handed to FD_SET() now comes out
+ * of a set that GenerateSelectSet() already validated under cs_hSocket, so an
+ * INVALID_SOCKET can no longer reach the fortified macros.
+ */
+static void SocketEvents(std::set<SOCKET>& recv_set, std::set<SOCKET>& send_set, std::set<SOCKET>& error_set)
+{
+    std::set<SOCKET> recv_select_set, send_select_set, error_select_set;
+    if (!GenerateSelectSet(recv_select_set, send_select_set, error_select_set)) {
+        MilliSleep(SELECT_TIMEOUT_MILLISECONDS);
+        return;
+    }
+
+    struct timeval timeout;
+    timeout.tv_sec = 0;
+    timeout.tv_usec = SELECT_TIMEOUT_MILLISECONDS * 1000; // frequency to poll pnode->vSend
+
+    fd_set fdsetRecv;
+    fd_set fdsetSend;
+    fd_set fdsetError;
+    FD_ZERO(&fdsetRecv);
+    FD_ZERO(&fdsetSend);
+    FD_ZERO(&fdsetError);
+    SOCKET hSocketMax = 0;
+
+    for (SOCKET hSocket : recv_select_set) {
+        FD_SET(hSocket, &fdsetRecv);
+        hSocketMax = std::max(hSocketMax, hSocket);
+    }
+
+    for (SOCKET hSocket : send_select_set) {
+        FD_SET(hSocket, &fdsetSend);
+        hSocketMax = std::max(hSocketMax, hSocket);
+    }
+
+    for (SOCKET hSocket : error_select_set) {
+        FD_SET(hSocket, &fdsetError);
+        hSocketMax = std::max(hSocketMax, hSocket);
+    }
+
+    int nSelect = select(hSocketMax + 1, &fdsetRecv, &fdsetSend, &fdsetError, &timeout);
+
+    if (nSelect == SOCKET_ERROR) {
+        int nErr = WSAGetLastError();
+        LogPrintf("socket select error %s\n", NetworkErrorString(nErr));
+        for (unsigned int i = 0; i <= hSocketMax; i++)
+            FD_SET(i, &fdsetRecv);
+        FD_ZERO(&fdsetSend);
+        FD_ZERO(&fdsetError);
+        MilliSleep(SELECT_TIMEOUT_MILLISECONDS);
+    }
+
+    for (SOCKET hSocket : recv_select_set) {
+        if (FD_ISSET(hSocket, &fdsetRecv)) {
+            recv_set.insert(hSocket);
+        }
+    }
+
+    for (SOCKET hSocket : send_select_set) {
+        if (FD_ISSET(hSocket, &fdsetSend)) {
+            send_set.insert(hSocket);
+        }
+    }
+
+    for (SOCKET hSocket : error_select_set) {
+        if (FD_ISSET(hSocket, &fdsetError)) {
+            error_set.insert(hSocket);
+        }
+    }
+}
+#endif
+
 void ThreadSocketHandler() {
     unsigned int nPrevNodeCount = 0;
     while (true) {
@@ -1082,98 +1290,16 @@ void ThreadSocketHandler() {
         //
         // Find which sockets have data to receive
         //
-        struct timeval timeout;
-        timeout.tv_sec = 0;
-        timeout.tv_usec = 50000; // frequency to poll pnode->vSend
+        std::set<SOCKET> recv_set, send_set, error_set;
+        SocketEvents(recv_set, send_set, error_set);
 
-        fd_set fdsetRecv;
-        fd_set fdsetSend;
-        fd_set fdsetError;
-        FD_ZERO(&fdsetRecv);
-        FD_ZERO(&fdsetSend);
-        FD_ZERO(&fdsetError);
-        SOCKET hSocketMax = 0;
-        bool have_fds = false;
-
-        for (const ListenSocket &hListenSocket : vhListenSocket) {
-            FD_SET(hListenSocket.socket, &fdsetRecv);
-            hSocketMax = std::max(hSocketMax, hListenSocket.socket);
-            have_fds = true;
-        }
-
-        {
-            LOCK(cs_vNodes);
-            for (CNode * pnode : vNodes)
-            {
-                // Decide what to select for BEFORE touching hSocket, so that cs_vSend and
-                // cs_vRecvMsg are released again before cs_hSocket is taken. Holding one of
-                // those across the FD_SET calls is what allowed a peer socket to be closed
-                // (hSocket set to -1) in between the validity check and its use.
-                //
-                // Implement the following logic:
-                // * If there is data to send, select() for sending data. As this only
-                //   happens when optimistic write failed, we choose to first drain the
-                //   write buffer in this case before receiving more. This avoids
-                //   needlessly queueing received data, if the remote peer is not themselves
-                //   receiving data. This means properly utilizing TCP flow control signalling.
-                // * Otherwise, if there is no (complete) message in the receive buffer,
-                //   or there is space left in the buffer, select() for receiving data.
-                // * (if neither of the above applies, there is certainly one message
-                //   in the receiver buffer ready to be processed).
-                // Together, that means that at least one of the following is always possible,
-                // so we don't deadlock:
-                // * We send some data.
-                // * We wait for data to be received (and disconnect after timeout).
-                // * We process a message in the buffer (message handler thread).
-                bool select_send;
-                {
-                    LOCK(pnode->cs_vSend);
-                    select_send = !pnode->vSendMsg.empty();
-                }
-                bool select_recv;
-                {
-                    TRY_LOCK(pnode->cs_vRecvMsg, lockRecv);
-                    select_recv = lockRecv && (pnode->vRecvMsg.empty() || !pnode->vRecvMsg.front().complete() ||
-                                               pnode->GetTotalRecvSize() <= ReceiveFloodSize());
-                }
-
-                LOCK(pnode->cs_hSocket);
-                if (pnode->hSocket == INVALID_SOCKET)
-                    continue;
-                FD_SET(pnode->hSocket, &fdsetError);
-                hSocketMax = std::max(hSocketMax, pnode->hSocket);
-                have_fds = true;
-                if (select_send) {
-                    FD_SET(pnode->hSocket, &fdsetSend);
-                    continue;
-                }
-                if (select_recv) {
-                    FD_SET(pnode->hSocket, &fdsetRecv);
-                }
-            }
-        }
-
-        int nSelect = select(have_fds ? hSocketMax + 1 : 0,
-                             &fdsetRecv, &fdsetSend, &fdsetError, &timeout);
         boost::this_thread::interruption_point();
-
-        if (nSelect == SOCKET_ERROR) {
-            if (have_fds) {
-                int nErr = WSAGetLastError();
-                LogPrintf("socket select error %s\n", NetworkErrorString(nErr));
-                for (unsigned int i = 0; i <= hSocketMax; i++)
-                    FD_SET(i, &fdsetRecv);
-            }
-            FD_ZERO(&fdsetSend);
-            FD_ZERO(&fdsetError);
-            MilliSleep(timeout.tv_usec / 1000);
-        }
 
         //
         // Accept new connections
         //
         for (const ListenSocket &hListenSocket : vhListenSocket) {
-            if (hListenSocket.socket != INVALID_SOCKET && FD_ISSET(hListenSocket.socket, &fdsetRecv)) {
+            if (hListenSocket.socket != INVALID_SOCKET && recv_set.count(hListenSocket.socket) > 0) {
                 AcceptConnection(hListenSocket);
             }
         }
@@ -1195,17 +1321,16 @@ void ThreadSocketHandler() {
             //
             // Receive
             //
-            // FD_ISSET goes through the same fortified __fdelt_chk as FD_SET, so it must not
-            // be reached with a closed socket either. Sample all three results once, under
-            // the lock, and act on the copies.
+            // Sample all three results once, under the lock, and act on the copies:
+            // the socket may be closed by another thread at any point after we let go.
             bool recvSet = false, sendSet = false, errorSet = false;
             {
                 LOCK(pnode->cs_hSocket);
                 if (pnode->hSocket == INVALID_SOCKET)
                     continue;
-                recvSet = FD_ISSET(pnode->hSocket, &fdsetRecv);
-                sendSet = FD_ISSET(pnode->hSocket, &fdsetSend);
-                errorSet = FD_ISSET(pnode->hSocket, &fdsetError);
+                recvSet = recv_set.count(pnode->hSocket) > 0;
+                sendSet = send_set.count(pnode->hSocket) > 0;
+                errorSet = error_set.count(pnode->hSocket) > 0;
             }
             if (recvSet || errorSet) {
                 TRY_LOCK(pnode->cs_vRecvMsg, lockRecv);
