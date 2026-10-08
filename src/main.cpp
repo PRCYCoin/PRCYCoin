@@ -5004,6 +5004,18 @@ bool ProcessNewBlock(CValidationState& state, CNode* pfrom, CBlock* pblock, CDis
     int coinbaseIdx = 0;
     if (pwalletMain) {
         LOCK2(cs_main, pwalletMain->cs_wallet);
+        // Decoy-pool maintenance is wallet-side only: it feeds decoy selection when this node
+        // later builds a transaction, and has no effect on validation or consensus. It runs
+        // once per connected block and does a random-access ReadBlockFromDisk every time,
+        // which dominates the cost of connecting these small blocks during a sync from zero.
+        //
+        // The pool is a capped (MAX_DECOY_POOL), randomly-sampled set, so while syncing we can
+        // sample every Nth block instead of every block and still fill it -- with the sample
+        // spread over more of the chain rather than clustered. Outside of IBD, behaviour is
+        // unchanged. Evaluated under cs_main, which is already held here, like the other
+        // chainActive reads in this function.
+        static const int DECOY_POOL_IBD_INTERVAL = 100;
+        if (!IsInitialBlockDownload() || chainActive.Height() % DECOY_POOL_IBD_INTERVAL == 0)
         {
             if (pblock->IsProofOfStake()) {
                 userTxStartIdx = 2;
