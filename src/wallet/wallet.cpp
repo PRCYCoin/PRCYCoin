@@ -2825,7 +2825,7 @@ StakingStatusError CWallet::StakingCoinStatus(CAmount& minFee, CAmount& maxFee)
                 std::set<std::pair<const CWalletTx*, unsigned int> > setCoinsRet;
                 CAmount nValueRet;
                 //check whether need consolidation
-                int ringSize = MIN_RING_SIZE + secp256k1_rand32() % (MAX_RING_SIZE - MIN_RING_SIZE + 1);
+                int ringSize = MIN_RING_SIZE + GetRandInt(MAX_RING_SIZE - MIN_RING_SIZE + 1);
                 CAmount MaxFeeSpendingReserve = ComputeFee(1, 2, MAX_RING_SIZE);
                 CAmount estimatedFee = 0;
                 bool selectCoinRet = SelectCoinsMinConf(true, estimatedFee, ringSize, 2, nReserveBalance + MaxFeeSpendingReserve, 1, 6, vCoins, setCoinsRet, nValueRet);
@@ -3180,10 +3180,7 @@ bool CWallet::CreateTransactionBulletProof(const CKey& txPrivDes, const CPubKey&
     SetRingSize(0);
 
     //randomize ring size
-    unsigned char rand_seed[16];
-    memcpy(rand_seed, txPrivDes.begin(), 16);
-    secp256k1_rand_seed(rand_seed);
-    ringSize = MIN_RING_SIZE + secp256k1_rand32() % (MAX_RING_SIZE - MIN_RING_SIZE + 1);
+    ringSize = MIN_RING_SIZE + GetRandInt(MAX_RING_SIZE - MIN_RING_SIZE + 1);
 
     //Currently we only allow transaction with one or two recipients
     //If two, the second recipient is a change output
@@ -4045,6 +4042,9 @@ bool CWallet::MakeShnorrSignatureTxIn(CTxIn& txin, uint256 cts)
 bool CWallet::selectDecoysAndRealIndex(CTransaction& tx, int& myIndex, int ringSize)
 {
     LogPrintf("Selecting coinbase decoys for transaction\n");
+    // Every random choice in decoy selection comes from the node's RNG, not from
+    // secp256k1's test-suite RNG.
+    FastRandomContext rng;
     if (coinbaseDecoysPool.size() <= 100) {
         for (int i = chainActive.Height() - Params().COINBASE_MATURITY(); i > 0; i--) {
             if (coinbaseDecoysPool.size() > 100) break;
@@ -4061,7 +4061,7 @@ bool CWallet::selectDecoysAndRealIndex(CTransaction& tx, int& myIndex, int ringS
 
                 for (size_t i = 0; i < coinbase.vout.size(); i++) {
                     if (!coinbase.vout[i].IsNull() && !coinbase.vout[i].commitment.empty() && coinbase.vout[i].nValue > 0 && !coinbase.vout[i].IsEmpty()) {
-                        if ((secp256k1_rand32() % 100) <= CWallet::PROBABILITY_NEW_COIN_SELECTED) {
+                        if ((int)rng.randrange(100) <= CWallet::PROBABILITY_NEW_COIN_SELECTED) {
                             COutPoint newOutPoint(coinbase.GetHash(), i);
                             if (coinbaseDecoysPool.count(newOutPoint) == 1) {
                                 continue;
@@ -4076,7 +4076,7 @@ bool CWallet::selectDecoysAndRealIndex(CTransaction& tx, int& myIndex, int ringS
                                 // The victim used to be picked but never erased. Not reached
                                 // today, since this fill stops at about 100 entries, well
                                 // below MAX_DECOY_POOL, but wrong if those limits change.
-                                int selected = secp256k1_rand32() % CWallet::MAX_DECOY_POOL;
+                                int selected = (int)rng.randrange(CWallet::MAX_DECOY_POOL);
                                 std::map<COutPoint, uint256>::const_iterator it = std::next(coinbaseDecoysPool.begin(), selected);
                                 coinbaseDecoysPool.erase(it);
                                 coinbaseDecoysPool[newOutPoint] = p->GetBlockHash();
@@ -4154,7 +4154,7 @@ bool CWallet::selectDecoysAndRealIndex(CTransaction& tx, int& myIndex, int ringS
                     }
                     bool duplicated = false;
                     bool invalid = false;
-                    const std::pair<COutPoint, uint256>& entry = coinbaseDecoys[secp256k1_rand32() % coinbaseDecoys.size()];
+                    const std::pair<COutPoint, uint256>& entry = coinbaseDecoys[rng.randrange(coinbaseDecoys.size())];
                     if (mapBlockIndex.count(entry.second) < 1) continue;
                     CBlockIndex* atTheblock = mapBlockIndex[entry.second];
                     if (!atTheblock || !chainActive.Contains(atTheblock)) continue;
@@ -4186,7 +4186,7 @@ bool CWallet::selectDecoysAndRealIndex(CTransaction& tx, int& myIndex, int ringS
                 std::vector<size_t> order(coinbaseDecoys.size());
                 for (size_t j = 0; j < order.size(); j++) order[j] = j;
                 for (size_t j = order.size(); j > 1; j--) {
-                    size_t k = secp256k1_rand32() % j;
+                    size_t k = rng.randrange(j);
                     std::swap(order[j - 1], order[k]);
                 }
                 for (size_t t = 0; t < order.size() && numDecoys < ringSize; t++) {
@@ -4216,7 +4216,7 @@ bool CWallet::selectDecoysAndRealIndex(CTransaction& tx, int& myIndex, int ringS
                     }
                     bool duplicated = false;
                     bool invalid = false;
-                    const std::pair<COutPoint, uint256>& entry = mergedDecoys[secp256k1_rand32() % mergedDecoys.size()];
+                    const std::pair<COutPoint, uint256>& entry = mergedDecoys[rng.randrange(mergedDecoys.size())];
                     if (mapBlockIndex.count(entry.second) < 1) continue;
                     CBlockIndex* atTheblock = mapBlockIndex[entry.second];
                     if (!atTheblock || !chainActive.Contains(atTheblock)) continue;
@@ -4245,7 +4245,7 @@ bool CWallet::selectDecoysAndRealIndex(CTransaction& tx, int& myIndex, int ringS
                 std::vector<size_t> order(mergedDecoys.size());
                 for (size_t j = 0; j < order.size(); j++) order[j] = j;
                 for (size_t j = order.size(); j > 1; j--) {
-                    size_t k = secp256k1_rand32() % j;
+                    size_t k = rng.randrange(j);
                     std::swap(order[j - 1], order[k]);
                 }
                 for (size_t t = 0; t < order.size() && numDecoys < ringSize; t++) {
@@ -4266,7 +4266,7 @@ bool CWallet::selectDecoysAndRealIndex(CTransaction& tx, int& myIndex, int ringS
             }
         }
     }
-    myIndex = secp256k1_rand32() % (tx.vin[0].decoys.size() + 1) - 1;
+    myIndex = (int)rng.randrange(tx.vin[0].decoys.size() + 1) - 1;
 
     for (size_t i = 0; i < tx.vin.size(); i++) {
         COutPoint prevout = tx.vin[i].prevout;
@@ -5384,10 +5384,7 @@ bool CWallet::SendAll(std::string des, CWalletTx& wtxNew, bool inclLocked)
                 secret.MakeNewKey(true);
                 SetMinVersion(FEATURE_COMPRPUBKEY);
 
-                unsigned char rand_seed[16];
-                memcpy(rand_seed, secret.begin(), 16);
-                secp256k1_rand_seed(rand_seed);
-                int ringSize = MIN_RING_SIZE + secp256k1_rand32() % (MAX_RING_SIZE - MIN_RING_SIZE + 1);
+                int ringSize = MIN_RING_SIZE + GetRandInt(MAX_RING_SIZE - MIN_RING_SIZE + 1);
 
                 estimateTxSize = ComputeTxSize(vCoins.size(), 1, ringSize);
                 nFeeNeeded = GetMinimumFee(estimateTxSize, nTxConfirmTarget, mempool);
@@ -5633,7 +5630,7 @@ bool CWallet::CreateSweepingTransaction(CAmount target, CAmount threshold, uint3
                 }
             }
             SetRingSize(0);
-            int ringSize = MIN_RING_SIZE + secp256k1_rand32() % (MAX_RING_SIZE - MIN_RING_SIZE + 1);
+            int ringSize = MIN_RING_SIZE + GetRandInt(MAX_RING_SIZE - MIN_RING_SIZE + 1);
             if (vCoins.size() <= 1) return false;
             CAmount estimatedFee = ComputeFee(vCoins.size(), 1, ringSize);
             if (combineMode != CombineMode::ON && (vCoins.empty() || (vCoins.size() < MIN_TX_INPUTS_FOR_SWEEPING) || (total < target + estimatedFee && vCoins.size() <= MAX_TX_INPUTS))) {
