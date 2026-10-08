@@ -172,6 +172,18 @@ bool CDBEnv::Compact(const std::string& strFile)
 {
     LOCK(cs_db);
 
+    // Do not free the shared Db handle while any CDB for this file is still open.
+    // A live CDB caches this pointer at construction and issues get/put/cursor
+    // calls without holding cs_db, so deleting it here (below) would be a
+    // use-after-free. The sibling teardown paths (Flush, Rewrite, the flush
+    // thread) all gate on the same refcount. Compaction is only an optimization,
+    // so it is skipped this time; the next call will try again.
+    std::map<std::string, int>::iterator refIt = mapFileUseCount.find(strFile);
+    if (refIt != mapFileUseCount.end() && refIt->second != 0) {
+        LogPrint(BCLog::DB, "CDBEnv::Compact : %s is in use, skipping compaction\n", strFile);
+        return false;
+    }
+
     DB_COMPACT dbcompact;
     dbcompact.compact_fillpercent = 80;
     dbcompact.compact_pages = DB_MAX_PAGES;

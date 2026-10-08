@@ -3268,6 +3268,7 @@ bool CWallet::CreateTransactionBulletProof(const CKey& txPrivDes, const CPubKey&
             if (nFeePay > 0) nFeeRet = nFeePay;
             unsigned int nBytes = 0;
             int iterations = 0;
+            bool fBuilt = false;
             while (true && iterations < 10) {
                 iterations++;
                 txNew.vin.clear();
@@ -3377,7 +3378,14 @@ bool CWallet::CreateTransactionBulletProof(const CKey& txPrivDes, const CPubKey&
 
                 // Embed the constructed transaction data in wtxNew.
                 *static_cast<CTransaction*>(&wtxNew) = CTransaction(txNew);
+                fBuilt = true;
                 break;
+            }
+            if (ret && !fBuilt) {
+                // Every attempt above left too little change for the fee and went round
+                // again. Without this, wtxNew would go on to makeRingCT with no inputs.
+                strFailReason = _("Could not select inputs that cover the amount and the fee. Please try again.");
+                ret = false;
             }
             if (ret && !makeRingCT(wtxNew, ringSize, strFailReason)) {
                 ret = false;
@@ -4092,6 +4100,13 @@ bool CWallet::MakeShnorrSignatureTxIn(CTxIn& txin, uint256 cts)
 
 bool CWallet::selectDecoysAndRealIndex(CTransaction& tx, int& myIndex, int ringSize)
 {
+    // Guard against an empty input set: the myIndex computation at the end
+    // dereferences tx.vin[0] unconditionally, and makeRingCT calls this before its
+    // own vin-empty check. Fail cleanly instead of reading out of bounds.
+    if (tx.vin.empty()) {
+        LogPrintf("%s: no inputs selected\n", __func__);
+        return false;
+    }
     LogPrintf("Selecting coinbase decoys for transaction\n");
     if (coinbaseDecoysPool.size() <= 100) {
         for (int i = chainActive.Height() - Params().COINBASE_MATURITY(); i > 0; i--) {
