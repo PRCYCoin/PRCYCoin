@@ -7074,35 +7074,45 @@ bool CWallet::RevealTxOutAmount(const CTransaction& tx, const CTxOut& out, CAmou
         return true;
     }
 
-    std::set<CKeyID> keyIDs;
-    GetKeys(keyIDs);
+    // Resolve the single key this output pays to directly, instead of deriving
+    // and testing EVERY key in the wallet. The previous code called GetKey()
+    // (which decrypts the HD seed and does a fresh BIP32 derivation) once per
+    // wallet key, per output - O(keys) expensive derivations for every output,
+    // which made balance/coin-selection/sending crawl on a large wallet. The
+    // output script encodes exactly one destination, so ExtractDestination
+    // inverts it and gives us the one key to try (same key the old loop found).
     CPubKey sharedSec;
-    for (const CKeyID& keyID : keyIDs) {
-        CKey privKey;
-        GetKey(keyID, privKey);
-        CScript scriptPubKey = GetScriptForDestination(privKey.GetPubKey());
-        if (scriptPubKey == out.scriptPubKey) {
-            CPubKey txPub(&(out.txPub[0]), &(out.txPub[0]) + 33);
-            CKey view;
-            if (myViewPrivateKey(view)) {
-                computeSharedSec(tx, out, sharedSec);
-                uint256 val = out.maskValue.amount;
-                uint256 mask = out.maskValue.mask;
-                CKey decodedMask;
-                ECDHInfo::Decode(mask.begin(), val.begin(), sharedSec, decodedMask, amount);
-                std::vector<unsigned char> commitment;
-                if (CreateCommitment(decodedMask.begin(), amount, commitment)) {
-                    //make sure the amount and commitment are matched
-                    if (commitment == out.commitment) {
-                        amountMap[out.scriptPubKey] = amount;
-                        blindMap[out.scriptPubKey] = decodedMask;
-                        blind.Set(blindMap[out.scriptPubKey].begin(), blindMap[out.scriptPubKey].end(), true);
-                        return true;
-                    } else {
-                        amount = 0;
-                        amountMap[out.scriptPubKey] = amount;
-                        return false;
-                    }
+    CTxDestination outDest;
+    if (!ExtractDestination(out.scriptPubKey, outDest)) {
+        amount = 0;
+        return false;
+    }
+    CKeyID keyID;
+    if (!CBitcoinAddress(outDest).GetKeyID(keyID)) {
+        amount = 0;
+        return false;
+    }
+    CKey privKey;
+    if (GetKey(keyID, privKey) && GetScriptForDestination(privKey.GetPubKey()) == out.scriptPubKey) {
+        CKey view;
+        if (myViewPrivateKey(view)) {
+            computeSharedSec(tx, out, sharedSec);
+            uint256 val = out.maskValue.amount;
+            uint256 mask = out.maskValue.mask;
+            CKey decodedMask;
+            ECDHInfo::Decode(mask.begin(), val.begin(), sharedSec, decodedMask, amount);
+            std::vector<unsigned char> commitment;
+            if (CreateCommitment(decodedMask.begin(), amount, commitment)) {
+                //make sure the amount and commitment are matched
+                if (commitment == out.commitment) {
+                    amountMap[out.scriptPubKey] = amount;
+                    blindMap[out.scriptPubKey] = decodedMask;
+                    blind.Set(blindMap[out.scriptPubKey].begin(), blindMap[out.scriptPubKey].end(), true);
+                    return true;
+                } else {
+                    amount = 0;
+                    amountMap[out.scriptPubKey] = amount;
+                    return false;
                 }
             }
         }
@@ -7113,18 +7123,17 @@ bool CWallet::RevealTxOutAmount(const CTransaction& tx, const CTxOut& out, CAmou
 
 bool CWallet::findCorrespondingPrivateKey(const CTxOut& txout, CKey& key) const
 {
-    std::set<CKeyID> keyIDs;
-    GetKeys(keyIDs);
-    for (const CKeyID& keyID : keyIDs) {
-        CBitcoinAddress address(keyID);
-        GetKey(keyID, key);
-        CPubKey pub = key.GetPubKey();
-        CScript script = GetScriptForDestination(pub);
-        if (script == txout.scriptPubKey) {
-            return true;
-        }
-    }
-    return false;
+    // Resolve the output's key directly rather than deriving and testing every
+    // key in the wallet (see RevealTxOutAmount for why the old scan was slow).
+    CTxDestination dest;
+    if (!ExtractDestination(txout.scriptPubKey, dest))
+        return false;
+    CKeyID keyID;
+    if (!CBitcoinAddress(dest).GetKeyID(keyID))
+        return false;
+    if (!GetKey(keyID, key))
+        return false;
+    return GetScriptForDestination(key.GetPubKey()) == txout.scriptPubKey;
 }
 
 bool CWallet::generateKeyImage(const CScript& scriptPubKey, CKeyImage& img) const
@@ -7132,35 +7141,39 @@ bool CWallet::generateKeyImage(const CScript& scriptPubKey, CKeyImage& img) cons
     if (IsLocked()) {
         return false;
     }
-    std::set<CKeyID> keyIDs;
-    GetKeys(keyIDs);
+    // Resolve the key for this output script directly instead of deriving and
+    // testing every key in the wallet. This runs once per input during a send
+    // (via selectDecoysAndRealIndex), so the old O(keys) scan made spends on a
+    // large wallet very slow. The key image computed below is unchanged - only
+    // the way the (single, identical) key is located changes.
+    CTxDestination dest;
+    if (!ExtractDestination(scriptPubKey, dest))
+        return false;
+    CKeyID keyID;
+    if (!CBitcoinAddress(dest).GetKeyID(keyID))
+        return false;
     CKey key;
     unsigned char pubData[65];
-    for (const CKeyID& keyID : keyIDs) {
-        CBitcoinAddress address(keyID);
-        GetKey(keyID, key);
+    if (GetKey(keyID, key) && GetScriptForDestination(key.GetPubKey()) == scriptPubKey) {
         CPubKey pub = key.GetPubKey();
-        CScript script = GetScriptForDestination(pub);
-        if (script == scriptPubKey) {
-            uint256 hash = pub.GetHash();
-            pubData[0] = *(pub.begin());
+        uint256 hash = pub.GetHash();
+        pubData[0] = *(pub.begin());
+        memcpy(pubData + 1, hash.begin(), 32);
+        CPubKey newPubKey(pubData, pubData + 33);
+        //P' = Hs(aR)G+B, a = view private, B = spend pub, R = tx public key
+        unsigned char ki[65];
+        //copy newPubKey into ki
+        memcpy(ki, newPubKey.begin(), newPubKey.size());
+        while (!secp256k1_ec_pubkey_tweak_mul(ki, newPubKey.size(), key.begin())) {
+            hash = newPubKey.GetHash();
+            pubData[0] = *(newPubKey.begin());
             memcpy(pubData + 1, hash.begin(), 32);
-            CPubKey newPubKey(pubData, pubData + 33);
-            //P' = Hs(aR)G+B, a = view private, B = spend pub, R = tx public key
-            unsigned char ki[65];
-            //copy newPubKey into ki
+            newPubKey.Set(pubData, pubData + 33);
             memcpy(ki, newPubKey.begin(), newPubKey.size());
-            while (!secp256k1_ec_pubkey_tweak_mul(ki, newPubKey.size(), key.begin())) {
-                hash = newPubKey.GetHash();
-                pubData[0] = *(newPubKey.begin());
-                memcpy(pubData + 1, hash.begin(), 32);
-                newPubKey.Set(pubData, pubData + 33);
-                memcpy(ki, newPubKey.begin(), newPubKey.size());
-            }
-
-            img = CKeyImage(ki, ki + 33);
-            return true;
         }
+
+        img = CKeyImage(ki, ki + 33);
+        return true;
     }
     return false;
 }
