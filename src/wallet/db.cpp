@@ -84,7 +84,7 @@ bool CDBEnv::Open(const fs::path& pathIn)
         nEnvFlags |= DB_PRIVATE;
 
     dbenv->set_lg_dir(pathLogDir.string().c_str());
-    dbenv->set_cachesize(1, 0x100000, 1); // 1 MiB should be enough for just the wallet, Increased by 1 GB
+    dbenv->set_cachesize(0, 0x100000, 1); // 1 MiB, matching upstream (was about 1 GiB, too much for a 32-bit process)
     dbenv->set_lg_bsize(0x10000);
     dbenv->set_lg_max(1048576);
     dbenv->set_lk_max_locks(40000);
@@ -105,6 +105,12 @@ bool CDBEnv::Open(const fs::path& pathIn)
         S_IRUSR | S_IWUSR);
     if (ret != 0) {
         dbenv->close(0);
+        // A DbEnv handle must not be used after close(). AppInit retries this Open
+        // (after moving "database" aside) when it fails, and without a fresh handle the
+        // retry's first call, set_lg_dir(), runs on the closed one and crashes. Reset()
+        // deletes the closed handle and creates a new one, so the retry can work.
+        // (Backport of the first commit of Bitcoin Core PR #13161.)
+        Reset();
         return error("CDBEnv::Open : Error %d opening database environment: %s\n", ret, DbEnv::strerror(ret));
     }
 
