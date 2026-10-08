@@ -27,13 +27,26 @@ jobs:
     - name: Prepare container (ubuntu:20.04 base image)
       run: |
         export DEBIAN_FRONTEND=noninteractive
-        apt-get update
-        apt-get install -y \
-          sudo ca-certificates curl wget git \
-          build-essential g++ make autoconf automake libtool pkg-config cmake bison \
-          python3 python3-setuptools patch xz-utils bzip2 unzip zip bsdmainutils file \
-          clang llvm imagemagick gettext \
-          libtinfo5 zlib1g-dev libbz2-dev xorriso
+        # Retry update+install as one unit. archive.ubuntu.com intermittently
+        # drops the base "focal" InRelease from Actions runners, and apt-get
+        # update only WARNS when an index fails to fetch, so the install then
+        # runs against an incomplete list and fails with "Package make has no
+        # installation candidate" -- make/autoconf/automake/libtool/pkg-config
+        # live only in the base pocket, never in -updates or -security, so one
+        # missed index takes all of them out at once.
+        printf 'Acquire::Retries "5";\n' > /etc/apt/apt.conf.d/99retries
+        n=0
+        until apt-get update && apt-get install -y \
+              sudo ca-certificates curl wget git \
+              build-essential g++ make autoconf automake libtool pkg-config cmake bison \
+              python3 python3-setuptools patch xz-utils bzip2 unzip zip bsdmainutils file \
+              clang llvm imagemagick gettext \
+              libtinfo5 zlib1g-dev libbz2-dev xorriso; do
+          n=$((n+1))
+          [ $n -ge 4 ] && { echo "apt failed after $n attempts"; exit 1; }
+          echo "apt failed (attempt $n) -- retrying"
+          sleep $((n * 10))
+        done
     - name: Checkout
       uses: actions/checkout@v5
     - name: Ensure version.txt Exists
@@ -88,13 +101,26 @@ jobs:
     - name: Prepare container (ubuntu:20.04 base image)
       run: |
         export DEBIAN_FRONTEND=noninteractive
-        apt-get update
-        apt-get install -y \
-          sudo ca-certificates curl wget git \
-          build-essential g++ make autoconf automake libtool pkg-config cmake bison \
-          python3 python3-setuptools patch xz-utils bzip2 unzip zip bsdmainutils file \
-          clang llvm imagemagick gettext \
-          libtinfo5 zlib1g-dev libbz2-dev xorriso
+        # Retry update+install as one unit. archive.ubuntu.com intermittently
+        # drops the base "focal" InRelease from Actions runners, and apt-get
+        # update only WARNS when an index fails to fetch, so the install then
+        # runs against an incomplete list and fails with "Package make has no
+        # installation candidate" -- make/autoconf/automake/libtool/pkg-config
+        # live only in the base pocket, never in -updates or -security, so one
+        # missed index takes all of them out at once.
+        printf 'Acquire::Retries "5";\n' > /etc/apt/apt.conf.d/99retries
+        n=0
+        until apt-get update && apt-get install -y \
+              sudo ca-certificates curl wget git \
+              build-essential g++ make autoconf automake libtool pkg-config cmake bison \
+              python3 python3-setuptools patch xz-utils bzip2 unzip zip bsdmainutils file \
+              clang llvm imagemagick gettext \
+              libtinfo5 zlib1g-dev libbz2-dev xorriso; do
+          n=$((n+1))
+          [ $n -ge 4 ] && { echo "apt failed after $n attempts"; exit 1; }
+          echo "apt failed (attempt $n) -- retrying"
+          sleep $((n * 10))
+        done
     - name: Getting Source
       uses: actions/download-artifact@v7
       with:
@@ -151,13 +177,26 @@ jobs:
     - name: Prepare container (ubuntu:20.04 base image)
       run: |
         export DEBIAN_FRONTEND=noninteractive
-        apt-get update
-        apt-get install -y \
-          sudo ca-certificates curl wget git \
-          build-essential g++ make autoconf automake libtool pkg-config cmake bison \
-          python3 python3-setuptools patch xz-utils bzip2 unzip zip bsdmainutils file \
-          clang llvm imagemagick gettext \
-          libtinfo5 zlib1g-dev libbz2-dev xorriso
+        # Retry update+install as one unit. archive.ubuntu.com intermittently
+        # drops the base "focal" InRelease from Actions runners, and apt-get
+        # update only WARNS when an index fails to fetch, so the install then
+        # runs against an incomplete list and fails with "Package make has no
+        # installation candidate" -- make/autoconf/automake/libtool/pkg-config
+        # live only in the base pocket, never in -updates or -security, so one
+        # missed index takes all of them out at once.
+        printf 'Acquire::Retries "5";\n' > /etc/apt/apt.conf.d/99retries
+        n=0
+        until apt-get update && apt-get install -y \
+              sudo ca-certificates curl wget git \
+              build-essential g++ make autoconf automake libtool pkg-config cmake bison \
+              python3 python3-setuptools patch xz-utils bzip2 unzip zip bsdmainutils file \
+              clang llvm imagemagick gettext \
+              libtinfo5 zlib1g-dev libbz2-dev xorriso; do
+          n=$((n+1))
+          [ $n -ge 4 ] && { echo "apt failed after $n attempts"; exit 1; }
+          echo "apt failed (attempt $n) -- retrying"
+          sleep $((n * 10))
+        done
     - name: Getting Source
       uses: actions/download-artifact@v7
       with:
@@ -219,13 +258,26 @@ jobs:
     - name: Prepare container (ubuntu:20.04 base image)
       run: |
         export DEBIAN_FRONTEND=noninteractive
-        apt-get update
-        apt-get install -y \
-          sudo ca-certificates curl wget git \
-          build-essential g++ make autoconf automake libtool pkg-config cmake bison \
-          python3 python3-setuptools patch xz-utils bzip2 unzip zip bsdmainutils file \
-          clang llvm imagemagick gettext \
-          libtinfo5 zlib1g-dev libbz2-dev xorriso
+        # Retry update+install as one unit. archive.ubuntu.com intermittently
+        # drops the base "focal" InRelease from Actions runners, and apt-get
+        # update only WARNS when an index fails to fetch, so the install then
+        # runs against an incomplete list and fails with "Package make has no
+        # installation candidate" -- make/autoconf/automake/libtool/pkg-config
+        # live only in the base pocket, never in -updates or -security, so one
+        # missed index takes all of them out at once.
+        printf 'Acquire::Retries "5";\n' > /etc/apt/apt.conf.d/99retries
+        n=0
+        until apt-get update && apt-get install -y \
+              sudo ca-certificates curl wget git \
+              build-essential g++ make autoconf automake libtool pkg-config cmake bison \
+              python3 python3-setuptools patch xz-utils bzip2 unzip zip bsdmainutils file \
+              clang llvm imagemagick gettext \
+              libtinfo5 zlib1g-dev libbz2-dev xorriso; do
+          n=$((n+1))
+          [ $n -ge 4 ] && { echo "apt failed after $n attempts"; exit 1; }
+          echo "apt failed (attempt $n) -- retrying"
+          sleep $((n * 10))
+        done
     - name: Getting Source
       uses: actions/download-artifact@v7
       with:
@@ -299,13 +351,26 @@ jobs:
     - name: Prepare container (ubuntu:20.04 base image)
       run: |
         export DEBIAN_FRONTEND=noninteractive
-        apt-get update
-        apt-get install -y \
-          sudo ca-certificates curl wget git \
-          build-essential g++ make autoconf automake libtool pkg-config cmake bison \
-          python3 python3-setuptools patch xz-utils bzip2 unzip zip bsdmainutils file \
-          clang llvm imagemagick gettext \
-          libtinfo5 zlib1g-dev libbz2-dev xorriso
+        # Retry update+install as one unit. archive.ubuntu.com intermittently
+        # drops the base "focal" InRelease from Actions runners, and apt-get
+        # update only WARNS when an index fails to fetch, so the install then
+        # runs against an incomplete list and fails with "Package make has no
+        # installation candidate" -- make/autoconf/automake/libtool/pkg-config
+        # live only in the base pocket, never in -updates or -security, so one
+        # missed index takes all of them out at once.
+        printf 'Acquire::Retries "5";\n' > /etc/apt/apt.conf.d/99retries
+        n=0
+        until apt-get update && apt-get install -y \
+              sudo ca-certificates curl wget git \
+              build-essential g++ make autoconf automake libtool pkg-config cmake bison \
+              python3 python3-setuptools patch xz-utils bzip2 unzip zip bsdmainutils file \
+              clang llvm imagemagick gettext \
+              libtinfo5 zlib1g-dev libbz2-dev xorriso; do
+          n=$((n+1))
+          [ $n -ge 4 ] && { echo "apt failed after $n attempts"; exit 1; }
+          echo "apt failed (attempt $n) -- retrying"
+          sleep $((n * 10))
+        done
     - name: Getting Source
       uses: actions/download-artifact@v7
       with:
@@ -361,13 +426,26 @@ jobs:
     - name: Prepare container (ubuntu:20.04 base image)
       run: |
         export DEBIAN_FRONTEND=noninteractive
-        apt-get update
-        apt-get install -y \
-          sudo ca-certificates curl wget git \
-          build-essential g++ make autoconf automake libtool pkg-config cmake bison \
-          python3 python3-setuptools patch xz-utils bzip2 unzip zip bsdmainutils file \
-          clang llvm imagemagick gettext \
-          libtinfo5 zlib1g-dev libbz2-dev xorriso
+        # Retry update+install as one unit. archive.ubuntu.com intermittently
+        # drops the base "focal" InRelease from Actions runners, and apt-get
+        # update only WARNS when an index fails to fetch, so the install then
+        # runs against an incomplete list and fails with "Package make has no
+        # installation candidate" -- make/autoconf/automake/libtool/pkg-config
+        # live only in the base pocket, never in -updates or -security, so one
+        # missed index takes all of them out at once.
+        printf 'Acquire::Retries "5";\n' > /etc/apt/apt.conf.d/99retries
+        n=0
+        until apt-get update && apt-get install -y \
+              sudo ca-certificates curl wget git \
+              build-essential g++ make autoconf automake libtool pkg-config cmake bison \
+              python3 python3-setuptools patch xz-utils bzip2 unzip zip bsdmainutils file \
+              clang llvm imagemagick gettext \
+              libtinfo5 zlib1g-dev libbz2-dev xorriso; do
+          n=$((n+1))
+          [ $n -ge 4 ] && { echo "apt failed after $n attempts"; exit 1; }
+          echo "apt failed (attempt $n) -- retrying"
+          sleep $((n * 10))
+        done
     - name: Getting Source
       uses: actions/download-artifact@v7
       with:
@@ -423,13 +501,26 @@ jobs:
     - name: Prepare container (ubuntu:20.04 base image)
       run: |
         export DEBIAN_FRONTEND=noninteractive
-        apt-get update
-        apt-get install -y \
-          sudo ca-certificates curl wget git \
-          build-essential g++ make autoconf automake libtool pkg-config cmake bison \
-          python3 python3-setuptools patch xz-utils bzip2 unzip zip bsdmainutils file \
-          clang llvm imagemagick gettext \
-          libtinfo5 zlib1g-dev libbz2-dev xorriso
+        # Retry update+install as one unit. archive.ubuntu.com intermittently
+        # drops the base "focal" InRelease from Actions runners, and apt-get
+        # update only WARNS when an index fails to fetch, so the install then
+        # runs against an incomplete list and fails with "Package make has no
+        # installation candidate" -- make/autoconf/automake/libtool/pkg-config
+        # live only in the base pocket, never in -updates or -security, so one
+        # missed index takes all of them out at once.
+        printf 'Acquire::Retries "5";\n' > /etc/apt/apt.conf.d/99retries
+        n=0
+        until apt-get update && apt-get install -y \
+              sudo ca-certificates curl wget git \
+              build-essential g++ make autoconf automake libtool pkg-config cmake bison \
+              python3 python3-setuptools patch xz-utils bzip2 unzip zip bsdmainutils file \
+              clang llvm imagemagick gettext \
+              libtinfo5 zlib1g-dev libbz2-dev xorriso; do
+          n=$((n+1))
+          [ $n -ge 4 ] && { echo "apt failed after $n attempts"; exit 1; }
+          echo "apt failed (attempt $n) -- retrying"
+          sleep $((n * 10))
+        done
     - name: Getting Source
       uses: actions/download-artifact@v7
       with:
