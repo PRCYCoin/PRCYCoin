@@ -5042,7 +5042,17 @@ bool ProcessNewBlock(CValidationState& state, CNode* pfrom, CBlock* pblock, CDis
                 }
             }
 
-            if (chainActive.Height() > Params().COINBASE_MATURITY()) {
+            // The coinbase pool takes its outputs from the block COINBASE_MATURITY below the
+            // tip, which has to be read from disk, and during a sync from zero that read is
+            // a large share of the cost of connecting a block. While in IBD, do it for a
+            // random one in DECOY_POOL_IBD_SAMPLE blocks instead of every block: the pool is
+            // capped and randomly evicted, so it still fills, from a wider stretch of the
+            // chain. The sample is random rather than every Nth block so the heights have no
+            // pattern. Outside IBD every block is read, as before. Wallet-side only: the
+            // pools feed decoy selection and are not used by validation.
+            static const int DECOY_POOL_IBD_SAMPLE = 100;
+            if (chainActive.Height() > Params().COINBASE_MATURITY() &&
+                (!IsInitialBlockDownload() || GetRandInt(DECOY_POOL_IBD_SAMPLE) == 0)) {
                 //read block chainActive.Height() - Params().COINBASE_MATURITY()
                 CBlockIndex* p = chainActive[chainActive.Height() - Params().COINBASE_MATURITY()];
                 CBlock b;
