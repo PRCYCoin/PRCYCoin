@@ -1462,9 +1462,13 @@ bool AppInit2(bool isDaemon)
                 // Populate list of invalid/fraudulent outpoints that are banned from the chain
                 invalid_out::LoadOutpoints();
 
-                // Recalculate money supply for blocks
+                // Recalculate money supply for blocks. A failure part-way stops startup, as the
+                // assertion or exception it replaces did, but with an error that names the cause
+                // and without offering to delete the block database.
                 if (GetBoolArg("-reindexmoneysupply", false)) {
-                    RecalculatePRCYSupply(1);
+                    if (!RecalculatePRCYSupply(1)) {
+                        return UIError(_("Error recalculating the money supply. See debug.log for details."));
+                    }
                 }
 
                 if (!fReindex) {
