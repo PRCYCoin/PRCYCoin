@@ -4266,6 +4266,17 @@ bool CWallet::selectDecoysAndRealIndex(CTransaction& tx, int& myIndex, int ringS
             }
         }
     }
+    // Every ring must be exactly ringSize. The small-pool branches stop when they run
+    // out of eligible candidates, so a ring can come up short (a high -decoyconfirm, a
+    // young chain). Fail here, before the real input is placed or any outpoint is queued.
+    for (size_t i = 0; i < tx.vin.size(); i++) {
+        if ((int)tx.vin[i].decoys.size() != ringSize) {
+            LogPrintf("%s: input %u has %u decoys, need %d\n", __func__, (unsigned int)i,
+                      (unsigned int)tx.vin[i].decoys.size(), ringSize);
+            return false;
+        }
+    }
+
     myIndex = (int)rng.randrange(tx.vin[0].decoys.size() + 1) - 1;
 
     for (size_t i = 0; i < tx.vin.size(); i++) {
