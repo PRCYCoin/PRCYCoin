@@ -4937,7 +4937,11 @@ bool ProcessNewBlock(CValidationState& state, CNode* pfrom, CBlock* pblock, CDis
                 LOCK(pwalletMain->cs_wallet);
                 if (pblock->IsProofOfStake()) {
                     if (pwalletMain->IsMine(pblock->vtx[1].vin[0])) {
-                        pwalletMain->mapWallet.erase(pblock->vtx[1].GetHash());
+                        std::map<uint256, CWalletTx>::iterator it = pwalletMain->mapWallet.find(pblock->vtx[1].GetHash());
+                        if (it != pwalletMain->mapWallet.end()) {
+                            pwalletMain->EraseFromWtxOrdered(it->second);
+                            pwalletMain->mapWallet.erase(it);
+                        }
                     }
                 }
             }
