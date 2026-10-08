@@ -20,7 +20,6 @@ jobs:
     name: Create Source Distribution
     runs-on: ubuntu-latest
     container: ubuntu:20.04
-    if: "github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[focal]')"
     env:
       ARTIFACT_DIR: source
     steps:
