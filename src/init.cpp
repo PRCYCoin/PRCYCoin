@@ -1462,9 +1462,15 @@ bool AppInit2(bool isDaemon)
                 // Populate list of invalid/fraudulent outpoints that are banned from the chain
                 invalid_out::LoadOutpoints();
 
-                // Recalculate money supply for blocks
+                // Recalculate money supply for blocks. RecalculatePRCYSupply() persists each
+                // block's supply as it goes, so a failure part-way leaves the stored supply
+                // recalculated up to that block and stale after it. The supply feeds the block
+                // reward, so carrying on with that would be worse than stopping here.
                 if (GetBoolArg("-reindexmoneysupply", false)) {
-                    RecalculatePRCYSupply(1);
+                    if (!RecalculatePRCYSupply(1)) {
+                        strLoadError = _("Error recalculating the money supply (see debug.log)");
+                        break;
+                    }
                 }
 
                 if (!fReindex) {

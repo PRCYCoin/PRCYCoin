@@ -218,23 +218,28 @@ std::set<CBlockIndex*> setDirtyBlockIndex;
 std::set<int> setDirtyFileInfo;
 } // namespace
 
-CAmount GetValueIn(CCoinsViewCache view, const CTransaction& tx)
+bool GetValueIn(const CCoinsViewCache& view, const CTransaction& tx, CAmount& nResult)
 {
-    if (tx.IsCoinBase())
-        return 0;
+    nResult = 0;
 
-    CAmount nResult = 0;
+    if (tx.IsCoinBase())
+        return true;
 
     if (tx.IsCoinStake()) {
         for (unsigned int i = 0; i < tx.vin.size(); i++) {
-            CAmount nValueIn; // = txPrev.vout[prevout.n].nValue;
+            CAmount nValueIn = 0;
             uint256 hashBlock;
             CTransaction txPrev;
-            GetTransaction(tx.vin[i].prevout.hash, txPrev, hashBlock, true);
+            if (!GetTransaction(tx.vin[i].prevout.hash, txPrev, hashBlock, true))
+                return error("%s : missing prevout for coinstake %s", __func__, tx.GetHash().GetHex());
+            if (tx.vin[i].prevout.n >= txPrev.vout.size())
+                return error("%s : prevout index out of range for coinstake %s", __func__, tx.GetHash().GetHex());
             const CTxOut& out = txPrev.vout[tx.vin[i].prevout.n];
             if (out.nValue > 0) {
                 nResult += out.nValue;
             } else {
+                if (tx.vin[i].encryptionKey.size() < 33)
+                    return error("%s : encryption key too short for coinstake %s", __func__, tx.GetHash().GetHex());
                 uint256 val = out.maskValue.amount;
                 uint256 mask = out.maskValue.mask;
                 CKey decodedMask;
@@ -243,16 +248,16 @@ CAmount GetValueIn(CCoinsViewCache view, const CTransaction& tx)
                 ECDHInfo::Decode(mask.begin(), val.begin(), sharedSec, decodedMask, nValueIn);
                 //Verify commitment
                 std::vector<unsigned char> commitment;
-                CWallet::CreateCommitment(decodedMask.begin(), nValueIn, commitment);
-                if (commitment != out.commitment) {
-                    throw std::runtime_error("Commitment for coinstake not correct");
-                }
+                if (!CWallet::CreateCommitment(decodedMask.begin(), nValueIn, commitment))
+                    return error("%s : failed to compute commitment for coinstake %s", __func__, tx.GetHash().GetHex());
+                if (commitment != out.commitment)
+                    return error("%s : commitment for coinstake %s not correct", __func__, tx.GetHash().GetHex());
                 nResult += nValueIn;
             }
         }
     }
 
-    return nResult;
+    return true;
 }
 
 //! Return priority of tx at height nHeight
@@ -384,8 +389,14 @@ bool VerifyBulletProofAggregate(const CTransaction& tx)
     secp256k1_pedersen_commitment commitments[MAX_VOUT];
     size_t i = 0;
     for (i = 0; i < tx.vout.size(); i++) {
-        if (!secp256k1_pedersen_commitment_parse(GetContext(), &commitments[i], &(tx.vout[i].commitment[0])))
-            throw std::runtime_error("Failed to parse pedersen commitment");
+        if (tx.vout[i].commitment.size() < 33) {
+            LogPrintf("%s: output commitment too short in tx %s\n", __func__, tx.GetHash().GetHex());
+            return false;
+        }
+        if (!secp256k1_pedersen_commitment_parse(GetContext(), &commitments[i], &(tx.vout[i].commitment[0]))) {
+            LogPrintf("%s: failed to parse pedersen commitment in tx %s\n", __func__, tx.GetHash().GetHex());
+            return false;
+        }
     }
     return secp256k1_bulletproof_rangeproof_verify(GetContext(), GetScratch(), GetGenerator(), &(tx.bulletproofs[0]), len, NULL, commitments, tx.vout.size(), 64, &secp256k1_generator_const_h, NULL, 0);
 }
@@ -466,13 +477,22 @@ bool VerifyRingSignatureWithTxFee(const CTransaction& tx, CBlockIndex* pindex)
                 }
             }
 
+            if (decoysForIn[j].n >= txPrev.vout.size()) {
+                LogPrintf("%s: decoy output index out of range in tx %s\n", __func__, decoysForIn[j].hash.GetHex());
+                return false;
+            }
+            const CTxOut& prevOut = txPrev.vout[decoysForIn[j].n];
+            if (prevOut.commitment.size() < 33) {
+                LogPrintf("%s: decoy commitment too short in tx %s\n", __func__, decoysForIn[j].hash.GetHex());
+                return false;
+            }
             CPubKey extractedPub;
-            if (!ExtractPubKey(txPrev.vout[decoysForIn[j].n].scriptPubKey, extractedPub)) {
+            if (!ExtractPubKey(prevOut.scriptPubKey, extractedPub)) {
                 LogPrintf("Failed to extract pubkey\n");
                 return false;
             }
             memcpy(allInPubKeys[i][j], extractedPub.begin(), 33);
-            memcpy(allInCommitments[i][j], &(txPrev.vout[decoysForIn[j].n].commitment[0]), 33);
+            memcpy(allInCommitments[i][j], &(prevOut.commitment[0]), 33);
         }
     }
     memcpy(allKeyImages[tx.vin.size()], tx.ntxFeeKeyImage.begin(), 33);
@@ -504,7 +524,10 @@ bool VerifyRingSignatureWithTxFee(const CTransaction& tx, CBlockIndex* pindex)
     unsigned char txFeeBlind[32];
     memset(txFeeBlind, 0, 32);
     if (!secp256k1_pedersen_commit(both, &allOutCommitmentsPacked[tx.vout.size()], txFeeBlind, tx.nTxFee, &secp256k1_generator_const_h, &secp256k1_generator_const_g))
-        throw std::runtime_error("Failed to computed commitment");
+    {
+        LogPrintf("%s: failed to compute tx fee commitment in tx %s\n", __func__, tx.GetHash().GetHex());
+        return false;
+    }
 
     //filling the additional pubkey elements for decoys: allInPubKeys[wtxNew.vin.size()][..]
     //allInPubKeys[wtxNew.vin.size()][j] = sum of allInPubKeys[..][j] + sum of allInCommitments[..][j] + sum of allOutCommitments
@@ -593,10 +616,16 @@ bool VerifyRingSignatureWithTxFee(const CTransaction& tx, CBlockIndex* pindex)
 
             secp256k1_pedersen_commitment sum;
             if (!secp256k1_pedersen_commitment_sum_pos(both, twoElements, 2, &sum))
-                throw std::runtime_error("failed to compute secp256k1_pedersen_commitment_sum_pos");
+            {
+                LogPrintf("%s: failed to compute pedersen commitment sum in tx %s\n", __func__, tx.GetHash().GetHex());
+                return false;
+            }
             size_t tempLength;
             if (!secp256k1_pedersen_commitment_to_serialized_pubkey(&sum, RIJ[i][j], &tempLength))
-                throw std::runtime_error("failed to serialize pedersen commitment");
+            {
+                LogPrintf("%s: failed to serialize pedersen commitment in tx %s\n", __func__, tx.GetHash().GetHex());
+                return false;
+            }
         }
 
         //compute C
@@ -642,9 +671,20 @@ bool ReVerifyPoSBlock(CBlockIndex* pindex)
             }
         }
 
+        if (block.vtx.size() < 2) {
+            LogPrintf("%s: PoS block %s has no coinstake\n", __func__, block.GetHash().GetHex());
+            return false;
+        }
         const CTransaction coinstake = block.vtx[1];
+        if (coinstake.vout.empty()) {
+            LogPrintf("%s: coinstake %s has no outputs\n", __func__, coinstake.GetHash().GetHex());
+            return false;
+        }
         CCoinsViewCache view(pcoinsTip);
-        nValueIn = GetValueIn(view, coinstake);
+        if (!GetValueIn(view, coinstake, nValueIn)) {
+            LogPrintf("%s: malformed inputs for coinstake %s\n", __func__, coinstake.GetHash().GetHex());
+            return false;
+        }
         nValueOut = coinstake.GetValueOut();
 
         size_t numUTXO = coinstake.vout.size();
@@ -1440,11 +1480,17 @@ bool VerifyShnorrKeyImageTxIn(const CTxIn& txin, uint256 ctsHash)
     twoElements[1] = &eI_commitment;
     secp256k1_pedersen_commitment sum;
     if (!secp256k1_pedersen_commitment_sum_pos(GetContext(), twoElements, 2, &sum))
-        throw std::runtime_error("failed to compute secp256k1_pedersen_commitment_sum_pos");
+    {
+        LogPrintf("%s: failed to compute pedersen commitment sum\n", __func__);
+        return false;
+    }
     size_t tempLength;
     unsigned char recomputed[33];
     if (!secp256k1_pedersen_commitment_to_serialized_pubkey(&sum, recomputed, &tempLength))
-        throw std::runtime_error("failed to serialize pedersen commitment");
+    {
+        LogPrintf("%s: failed to serialize pedersen commitment\n", __func__);
+        return false;
+    }
 
     for (int i = 0; i < 33; i++)
         if (S[i] != recomputed[i]) return false;
@@ -1682,7 +1728,9 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState& state, const CTransa
 
             // Bring the best block into scope
             view.GetBestBlock();
-            nValueIn = GetValueIn(view, tx);
+            if (!GetValueIn(view, tx, nValueIn))
+                return state.DoS(100, error("AcceptToMemoryPool : malformed or unspendable inputs for transaction %s", tx.GetHash().ToString()),
+                    REJECT_INVALID, "bad-txns-invalid-inputs");
 
             // we have all inputs cached now, so switch back to dummy, so we don't need to keep lock on mempool
             view.SetBackend(dummy);
@@ -1908,7 +1956,9 @@ bool AcceptableInputs(CTxMemPool& pool, CValidationState& state, const CTransact
             // Bring the best block into scope
             view.GetBestBlock();
 
-            nValueIn = GetValueIn(view, tx);
+            if (!GetValueIn(view, tx, nValueIn))
+                return state.DoS(100, error("AcceptableInputs : malformed or unspendable inputs for transaction %s", tx.GetHash().ToString()),
+                    REJECT_INVALID, "bad-txns-invalid-inputs");
 
             // we have all inputs cached now, so switch back to dummy, so we don't need to keep lock on mempool
             view.SetBackend(dummy);
@@ -3016,7 +3066,10 @@ bool RecalculatePRCYSupply(int nHeightStart)
             uiInterface.ShowProgress(_("Recalculating PRCY supply..."), percent);
         }
         CBlock block;
-        assert(ReadBlockFromDisk(block, pindex));
+        if (!ReadBlockFromDisk(block, pindex)) {
+            LogPrintf("%s: failed to read block at height %d\n", __func__, pindex->nHeight);
+            return false;
+        }
 
         CAmount nValueIn = 0;
         CAmount nValueOut = 0;
@@ -3025,18 +3078,30 @@ bool RecalculatePRCYSupply(int nHeightStart)
             nFees += tx.nTxFee;
             if (tx.IsCoinStake()) {
                 for (unsigned int i = 0; i < tx.vin.size(); i++) {
-                    CAmount nTemp; // = txPrev.vout[prevout.n].nValue;
+                    CAmount nTemp = 0;
                     uint256 hashBlock;
                     CTransaction txPrev;
-                    GetTransaction(tx.vin[i].prevout.hash, txPrev, hashBlock, true);
+                    if (!GetTransaction(tx.vin[i].prevout.hash, txPrev, hashBlock, true)) {
+                        LogPrintf("%s: missing prevout for coinstake %s\n", __func__, tx.GetHash().GetHex());
+                        return false;
+                    }
+                    if (tx.vin[i].prevout.n >= txPrev.vout.size()) {
+                        LogPrintf("%s: prevout index out of range for coinstake %s\n", __func__, tx.GetHash().GetHex());
+                        return false;
+                    }
                     const CTxOut& out = txPrev.vout[tx.vin[i].prevout.n];
                     if (out.nValue > 0) {
                         //UTXO created by coinbase/coin audit/coinstake transaction
                         if (!VerifyZeroBlindCommitment(out)) {
-                            throw std::runtime_error("Commitment for coinstake not correct: failed to verify blind commitment");
+                            LogPrintf("%s: failed to verify blind commitment for coinstake %s\n", __func__, tx.GetHash().GetHex());
+                            return false;
                         }
                         nValueIn += out.nValue;
                     } else {
+                        if (tx.vin[i].encryptionKey.size() < 33) {
+                            LogPrintf("%s: encryption key too short for coinstake %s\n", __func__, tx.GetHash().GetHex());
+                            return false;
+                        }
                         uint256 val = out.maskValue.amount;
                         uint256 mask = out.maskValue.mask;
                         CKey decodedMask;
@@ -3045,9 +3110,13 @@ bool RecalculatePRCYSupply(int nHeightStart)
                         ECDHInfo::Decode(mask.begin(), val.begin(), sharedSec, decodedMask, nTemp);
                         //Verify commitment
                         std::vector<unsigned char> commitment;
-                        CWallet::CreateCommitment(decodedMask.begin(), nTemp, commitment);
+                        if (!CWallet::CreateCommitment(decodedMask.begin(), nTemp, commitment)) {
+                            LogPrintf("%s: failed to compute commitment for coinstake %s\n", __func__, tx.GetHash().GetHex());
+                            return false;
+                        }
                         if (commitment != out.commitment) {
-                            throw std::runtime_error("Commitment for coinstake not correct");
+                            LogPrintf("%s: commitment for coinstake %s not correct\n", __func__, tx.GetHash().GetHex());
+                            return false;
                         }
                         nValueIn += nTemp;
                     }
@@ -3247,7 +3316,10 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
                     REJECT_INVALID, "bad-txns-low-fee");
             if (!tx.IsCoinStake())
                 nFees += tx.nTxFee;
-            CAmount valTemp = GetValueIn(view, tx);
+            CAmount valTemp = 0;
+            if (!GetValueIn(view, tx, valTemp))
+                return state.DoS(100, error("ConnectBlock() : malformed or unspendable inputs for transaction %s", tx.GetHash().ToString()),
+                    REJECT_INVALID, "bad-txns-invalid-inputs");
             nValueIn += valTemp;
 
             std::vector<CScriptCheck> vChecks;
