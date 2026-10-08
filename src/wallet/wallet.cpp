@@ -2141,13 +2141,22 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
             }
 
             pindex = chainActive.Next(pindex);
+            // Past the tip: the scan is complete. Stop here rather than let the progress
+            // and abort messages below dereference the NULL pindex.
+            if (!pindex)
+                break;
             if (GetTime() >= nNow + 60) {
                 nNow = GetTime();
                 LogPrintf("Still rescanning. At block %d. Progress=%f\n", pindex->nHeight, Checkpoints::GuessVerificationProgress(pindex));
             }
             if (ShutdownRequested()) {
                 LogPrintf("Rescan aborted at block %d. Please rescanwallettransactions %f from the Debug Console to continue.\n", pindex->nHeight, pindex->nHeight);
-                return false;
+                // Return the cancellation sentinel (-1), NOT false/0. The caller in
+                // AppInit only treats -1 as an abort; a 0 return looks like a clean
+                // completion, so it would persist best-block = chain tip and skip the
+                // rest of the chain on the next start, silently losing any wallet
+                // activity in the unscanned tail.
+                return -1;
             }
         }
         ShowProgress(_("Rescanning... Please do not interrupt this process as it could lead to a corrupt wallet."), 100); // hide progress dialog in GUI
