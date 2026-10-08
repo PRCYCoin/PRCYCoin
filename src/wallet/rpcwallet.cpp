@@ -1335,7 +1335,7 @@ UniValue listtransactions(const UniValue& params, bool fHelp)
             if (pacentry != 0)
                 AcentryToJSON(*pacentry, strAccount, ret);
 
-            if ((int)ret.size() >= (nCount + nFrom)) break;
+            if ((int64_t)ret.size() >= (int64_t)nCount + nFrom) break;
         }
     }
 
@@ -1343,7 +1343,10 @@ UniValue listtransactions(const UniValue& params, bool fHelp)
 
     if (nFrom > (int)ret.size())
         nFrom = ret.size();
-    if ((nFrom + nCount) > (int)ret.size())
+    // In 64 bits: count + from can exceed INT_MAX, and when that addition overflowed
+    // in int this clamp was skipped, so the result below asked for billions of entries
+    // and the node terminated with "Out of memory".
+    if ((int64_t)nFrom + nCount > (int64_t)ret.size())
         nCount = ret.size() - nFrom;
 
     const std::vector<UniValue>& txs = ret.getValues();
@@ -1436,7 +1439,7 @@ UniValue listtransactionsbypaymentid(const UniValue& params, bool fHelp)
             if (pacentry != 0)
                 AcentryToJSON(*pacentry, strAccount, ret);
 
-            if ((int)ret.size() >= (nCount + nFrom)) break;
+            if ((int64_t)ret.size() >= (int64_t)nCount + nFrom) break;
         }
     }
 
@@ -1444,7 +1447,10 @@ UniValue listtransactionsbypaymentid(const UniValue& params, bool fHelp)
 
     if (nFrom > (int)ret.size())
         nFrom = ret.size();
-    if ((nFrom + nCount) > (int)ret.size())
+    // In 64 bits: count + from can exceed INT_MAX, and when that addition overflowed
+    // in int this clamp was skipped, so the result below asked for billions of entries
+    // and the node terminated with "Out of memory".
+    if ((int64_t)nFrom + nCount > (int64_t)ret.size())
         nCount = ret.size() - nFrom;
 
     const std::vector<UniValue>& txs = ret.getValues();
