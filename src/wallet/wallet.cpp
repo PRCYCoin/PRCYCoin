@@ -4154,58 +4154,8 @@ static bool IsUsableDecoy(const COutPoint& outpoint)
     return coins && coins->IsAvailable(outpoint.n);
 }
 
-/**
- * Top up the decoy candidates from the active chain, newest block first, using the
- * criteria ProcessNewBlock uses to fill the decoy pools: coinbase-type outputs of
- * mature, non-PoA blocks go into both lists, other outputs into allCandidates only.
- * Stops when both lists reach their targets, or after MAX_SCAN_BLOCKS blocks.
- *
- * An outpoint already in 'seen' is skipped, and every outpoint added is inserted into
- * it. The decoy pools themselves are not modified.
- */
-static void AddDecoyCandidatesFromChain(FastRandomContext& rng, int64_t nMinDepth, std::set<COutPoint>& seen,
-                                        std::vector<COutPoint>& coinbaseCandidates, std::vector<COutPoint>& allCandidates,
-                                        size_t nCoinbaseTarget, size_t nAllTarget)
-{
-    AssertLockHeld(cs_main);
-    const int MAX_SCAN_BLOCKS = 10000;
-    const int nTipHeight = chainActive.Height();
-    const int nMaturity = Params().COINBASE_MATURITY();
-    int nScanned = 0;
-    for (int h = std::min<int64_t>(nTipHeight, nTipHeight + 1 - nMinDepth); h > 0 && nScanned < MAX_SCAN_BLOCKS; h--, nScanned++) {
-        if (coinbaseCandidates.size() >= nCoinbaseTarget && allCandidates.size() >= nAllTarget) break;
-        CBlockIndex* pindex = chainActive[h];
-        CBlock block;
-        if (!pindex || !ReadBlockFromDisk(block, pindex)) continue;
-        const size_t coinbaseIdx = pindex->IsProofOfStake() ? 1 : 0;
-        if (block.vtx.size() <= coinbaseIdx) continue;
-
-        if (h <= nTipHeight - nMaturity && block.posBlocksAudited.empty()) {
-            const CTransaction& coinbase = block.vtx[coinbaseIdx];
-            for (size_t n = 0; n < coinbase.vout.size(); n++) {
-                const CTxOut& out = coinbase.vout[n];
-                if (out.IsNull() || out.commitment.empty() || out.nValue <= 0 || out.IsEmpty()) continue;
-                if ((int)rng.randrange(100) > CWallet::PROBABILITY_NEW_COIN_SELECTED) continue;
-                COutPoint outpoint(coinbase.GetHash(), n);
-                if (!IsUsableDecoy(outpoint) || !seen.insert(outpoint).second) continue;
-                coinbaseCandidates.push_back(outpoint);
-                allCandidates.push_back(outpoint);
-            }
-        }
-        for (size_t t = coinbaseIdx + 1; t < block.vtx.size(); t++) {
-            const CTransaction& txOut = block.vtx[t];
-            for (size_t n = 0; n < txOut.vout.size(); n++) {
-                if (txOut.vout[n].commitment.empty()) continue;
-                if ((int)rng.randrange(100) > CWallet::PROBABILITY_NEW_COIN_SELECTED) continue;
-                COutPoint outpoint(txOut.GetHash(), n);
-                if (!IsUsableDecoy(outpoint) || !seen.insert(outpoint).second) continue;
-                allCandidates.push_back(outpoint);
-            }
-        }
-    }
-    LogPrintf("%s: read %d blocks, %u coinbase and %u total decoy candidates\n", __func__, nScanned,
-              (unsigned int)coinbaseCandidates.size(), (unsigned int)allCandidates.size());
-}
+static bool ChooseDecoys(CTransaction& tx, const std::vector<bool>& spendsCoinbase, std::set<COutPoint>& used,
+                         int ringSize, int64_t nMinDepth, FastRandomContext& rng);
 
 bool CWallet::selectDecoysAndRealIndex(CTransaction& tx, int& myIndex, int ringSize)
 {
@@ -4220,50 +4170,6 @@ bool CWallet::selectDecoysAndRealIndex(CTransaction& tx, int& myIndex, int ringS
     // Every random choice in decoy selection comes from the node's RNG, not from
     // secp256k1's test-suite RNG.
     FastRandomContext rng;
-    if (coinbaseDecoysPool.size() <= 100) {
-        for (int i = chainActive.Height() - Params().COINBASE_MATURITY(); i > 0; i--) {
-            if (coinbaseDecoysPool.size() > 100) break;
-            CBlockIndex* p = chainActive[i];
-            CBlock b;
-            if (ReadBlockFromDisk(b, p)) {
-                int coinbaseIdx = 0;
-                if (p->IsProofOfStake()) {
-                    coinbaseIdx = 1;
-                }
-                //dont select poa as decoy
-                if (b.posBlocksAudited.size() > 0) continue;
-                CTransaction& coinbase = b.vtx[coinbaseIdx];
-
-                for (size_t i = 0; i < coinbase.vout.size(); i++) {
-                    if (!coinbase.vout[i].IsNull() && !coinbase.vout[i].commitment.empty() && coinbase.vout[i].nValue > 0 && !coinbase.vout[i].IsEmpty()) {
-                        if ((int)rng.randrange(100) <= CWallet::PROBABILITY_NEW_COIN_SELECTED) {
-                            COutPoint newOutPoint(coinbase.GetHash(), i);
-                            if (coinbaseDecoysPool.count(newOutPoint) == 1) {
-                                continue;
-                            }
-                            if (!ValidOutPoint(newOutPoint)) {
-                                break;
-                            }
-                            //add new coinbase transaction to the pool
-                            if (coinbaseDecoysPool.size() >= CWallet::MAX_DECOY_POOL) {
-                                // Evict a random existing entry to keep the pool bounded,
-                                // as the pool maintenance in ProcessNewBlock (main.cpp) does.
-                                // The victim used to be picked but never erased. Not reached
-                                // today, since this fill stops at about 100 entries, well
-                                // below MAX_DECOY_POOL, but wrong if those limits change.
-                                int selected = (int)rng.randrange(CWallet::MAX_DECOY_POOL);
-                                std::map<COutPoint, uint256>::const_iterator it = std::next(coinbaseDecoysPool.begin(), selected);
-                                coinbaseDecoysPool.erase(it);
-                                coinbaseDecoysPool[newOutPoint] = p->GetBlockHash();
-                            } else {
-                                coinbaseDecoysPool[newOutPoint] = p->GetBlockHash();
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
     if (ringSize <= 0) return false;
 
     // No outpoint may appear twice anywhere in this transaction: not in two rings, not
@@ -4278,7 +4184,6 @@ bool CWallet::selectDecoysAndRealIndex(CTransaction& tx, int& myIndex, int ringS
     //generate key images
     myIndex = -1;
     std::vector<bool> spendsCoinbase(tx.vin.size(), false);
-    size_t nCoinbaseInputs = 0;
     for (size_t i = 0; i < tx.vin.size(); i++) {
         CTransaction txPrev;
         uint256 hashBlock;
@@ -4317,77 +4222,17 @@ bool CWallet::selectDecoysAndRealIndex(CTransaction& tx, int& myIndex, int ringS
         pendingKeyImages.push_back(ki.GetHex());
         if (txPrev.IsCoinAudit() || txPrev.IsCoinBase() || txPrev.IsCoinStake()) {
             spendsCoinbase[i] = true;
-            nCoinbaseInputs++;
         }
     }
 
-    // Candidate decoys: pool entries that are usable right now (see IsUsableDecoy), each
-    // outpoint once. An input spending a coinbase-type output takes its decoys from the
-    // coinbase pool only; any other input takes them from both pools.
-    const int nTipHeight = chainActive.Height();
-    auto usableBlock = [&](const uint256& hashBlock) {
-        BlockMap::const_iterator it = mapBlockIndex.find(hashBlock);
-        return it != mapBlockIndex.end() && it->second && chainActive.Contains(it->second) &&
-               1 + nTipHeight - it->second->nHeight >= DecoyConfirmationMinimum;
-    };
-    std::set<COutPoint> seen(used);
-    std::vector<COutPoint> coinbaseCandidates;
-    std::vector<COutPoint> allCandidates;
-    for (const std::pair<const COutPoint, uint256>& entry : coinbaseDecoysPool) {
-        if (!usableBlock(entry.second) || !IsUsableDecoy(entry.first) || !seen.insert(entry.first).second) continue;
-        coinbaseCandidates.push_back(entry.first);
-        allCandidates.push_back(entry.first);
-    }
-    for (const std::pair<const COutPoint, uint256>& entry : userDecoysPool) {
-        if (!usableBlock(entry.second) || !IsUsableDecoy(entry.first) || !seen.insert(entry.first).second) continue;
-        allCandidates.push_back(entry.first);
-    }
+    // Choose decoys: ringSize per input, matched to the kind of output it spends, each
+    // drawn by age from the whole chain (see DecoyPicker below). The decoy pools are no
+    // longer used here.
+    if (!ChooseDecoys(tx, spendsCoinbase, used, ringSize, DecoyConfirmationMinimum, rng)) return false;
 
-    // Each pool holds at most MAX_DECOY_POOL entries and is nearly empty after a restart,
-    // which a transaction with several inputs can outgrow now that no decoy is used twice.
-    // Aim for twice what is needed, so the decoys are a random subset of the candidates
-    // rather than all of them, and top up from the chain when the pools fall short.
-    const size_t nCoinbaseNeeded = nCoinbaseInputs * (size_t)ringSize;
-    const size_t nAllNeeded = tx.vin.size() * (size_t)ringSize;
-    if (coinbaseCandidates.size() < 2 * nCoinbaseNeeded || allCandidates.size() < 2 * nAllNeeded) {
-        AddDecoyCandidatesFromChain(rng, DecoyConfirmationMinimum, seen, coinbaseCandidates, allCandidates,
-                                    2 * nCoinbaseNeeded, 2 * nAllNeeded);
-    }
-    if (coinbaseCandidates.size() < nCoinbaseNeeded || allCandidates.size() < nAllNeeded) {
-        LogPrintf("Not enough decoys. Please wait approximately 10 minutes and try again.\n");
-        return false;
-    }
-
-    //Choose decoys
-    auto shuffle = [&rng](std::vector<COutPoint>& v) {
-        for (size_t j = v.size(); j > 1; j--) {
-            std::swap(v[j - 1], v[rng.randrange(j)]);
-        }
-    };
-    shuffle(coinbaseCandidates);
-    shuffle(allCandidates);
-    // Inputs spending coinbase-type outputs go first: they can only use coinbase-type
-    // decoys, and the other inputs can use those too. The counts checked above are then
-    // enough for every ring.
-    size_t nextCoinbase = 0;
-    size_t nextAll = 0;
-    for (int pass = 0; pass < 2; pass++) {
-        const bool fCoinbasePass = (pass == 0);
-        const std::vector<COutPoint>& candidates = fCoinbasePass ? coinbaseCandidates : allCandidates;
-        size_t& next = fCoinbasePass ? nextCoinbase : nextAll;
-        for (size_t i = 0; i < tx.vin.size(); i++) {
-            if (spendsCoinbase[i] != fCoinbasePass) continue;
-            while ((int)tx.vin[i].decoys.size() < ringSize && next < candidates.size()) {
-                const COutPoint& outpoint = candidates[next++];
-                if (used.insert(outpoint).second) {
-                    tx.vin[i].decoys.push_back(outpoint);
-                }
-            }
-        }
-    }
-    // Every ring must be exactly ringSize. The small-pool branches stop when they run
-    // out of eligible candidates, so a ring can come up short (a high -decoyconfirm, a
-    // young chain). Fail here, before the real input is placed or any outpoint is queued.
+    // Every ring must be exactly ringSize. The loop above fails rather than stopping
+    // short, so this is a backstop: fail before the real input is placed or any outpoint
+    // is queued.
     for (size_t i = 0; i < tx.vin.size(); i++) {
         if ((int)tx.vin[i].decoys.size() != ringSize) {
             LogPrintf("%s: input %u has %u decoys, need %d\n", __func__, (unsigned int)i,
@@ -4416,6 +4261,172 @@ bool CWallet::selectDecoysAndRealIndex(CTransaction& tx, int& myIndex, int ringS
         }
     }
 
+    return true;
+}
+
+/**
+ * Draws ring members by age, from the whole active chain.
+ *
+ * Each decoy's age is drawn first and an output of that age picked second, instead of
+ * taking decoys from the decoy pools, which only ever hold recent outputs.
+ *
+ * ln(age in seconds) follows a gamma distribution with shape 19.28 and scale 1/1.61, the
+ * spend-age model Monero's wallet uses (Moser et al., "An Empirical Analysis of
+ * Traceability in the Monero Blockchain", PETS 2018): a median of about a day and a half,
+ * and a long tail. Ages convert to blocks at the target spacing. A draw younger than the
+ * youngest usable block lands uniformly in the RECENT_WINDOW blocks just past it, as
+ * Monero does inside its unlock window; a draw older than the chain is drawn again.
+ * Within the chosen block the output is picked uniformly.
+ *
+ * Decoys are matched to the kind of output being spent: an input that spends a
+ * coinbase-type output gets coinbase-type decoys (from the coinbase or coinstake of a
+ * mature, non-PoA block, as the coinbase pool did), and any other input gets outputs of
+ * ordinary transactions. Outputs that ring verification cannot use are skipped.
+ *
+ * Blocks are read at most once per transaction.
+ */
+namespace {
+class DecoyPicker
+{
+public:
+    DecoyPicker(FastRandomContext& rngIn, int64_t nMinDepth) : rng(rngIn), gamma(GAMMA_SHAPE, GAMMA_SCALE)
+    {
+        AssertLockHeld(cs_main);
+        nTipHeight = chainActive.Height();
+        nSpacing = std::max<int64_t>(1, Params().TargetSpacing());
+        nYoungestOther = (int)std::min<int64_t>(nTipHeight, nTipHeight + 1 - nMinDepth);
+        nYoungestCoinbase = std::min(nYoungestOther, nTipHeight - Params().COINBASE_MATURITY());
+    }
+
+    /** Pick a usable output of the given type that is not in 'used', and add it there. */
+    bool Pick(bool fCoinbaseType, std::set<COutPoint>& used, COutPoint& picked)
+    {
+        const int nYoungest = fCoinbaseType ? nYoungestCoinbase : nYoungestOther;
+        if (nYoungest < 1) return false;
+        for (int n = 0; n < MAX_DRAWS; n++) {
+            const int nHeight = DrawHeight(nYoungest);
+            if (nHeight < 1) continue;
+            const std::vector<COutPoint>& outputs = Outputs(nHeight, fCoinbaseType);
+            if (outputs.empty()) continue;
+            const COutPoint& outpoint = outputs[rng.randrange(outputs.size())];
+            if (used.count(outpoint) || !IsUsableDecoy(outpoint)) continue;
+            used.insert(outpoint);
+            picked = outpoint;
+            return true;
+        }
+        return false;
+    }
+
+    size_t BlocksRead() const { return cache.size(); }
+
+private:
+    static constexpr double GAMMA_SHAPE = 19.28;
+    static constexpr double GAMMA_SCALE = 1 / 1.61;
+    static constexpr int RECENT_WINDOW = 30;
+    static constexpr int MAX_DRAWS = 10000;
+
+    /** std::gamma_distribution takes a UniformRandomBitGenerator. */
+    struct Engine {
+        typedef uint64_t result_type;
+        FastRandomContext& rng;
+        static constexpr uint64_t min() { return 0; }
+        static constexpr uint64_t max() { return std::numeric_limits<uint64_t>::max(); }
+        uint64_t operator()() { return rng.rand64(); }
+    };
+
+    struct BlockOutputs {
+        std::vector<COutPoint> coinbase;
+        std::vector<COutPoint> other;
+    };
+
+    /** What ring verification needs from every member: a pay-to-pubkey script with a
+     *  compressed key, and a commitment of at least 33 bytes. */
+    static bool IsRingMemberShape(const CTxOut& out)
+    {
+        CPubKey pubkey;
+        return out.commitment.size() >= 33 && ExtractPubKey(out.scriptPubKey, pubkey) && pubkey.IsCompressed();
+    }
+
+    /** A height to take a decoy from, or -1 if the drawn age is older than the chain. */
+    int DrawHeight(int nYoungest)
+    {
+        Engine engine{rng};
+        const double nAge = std::exp(gamma(engine)) / nSpacing;
+        if (nAge < nTipHeight - nYoungest) {
+            return nYoungest - (int)rng.randrange(std::min(RECENT_WINDOW, nYoungest));
+        }
+        if (nAge >= nTipHeight) return -1;
+        return nTipHeight - (int)nAge;
+    }
+
+    const std::vector<COutPoint>& Outputs(int nHeight, bool fCoinbaseType)
+    {
+        static const std::vector<COutPoint> none;
+        CBlockIndex* pindex = chainActive[nHeight];
+        if (!pindex) return none;
+        const size_t coinbaseIdx = pindex->IsProofOfStake() ? 1 : 0;
+        // Skip without reading the block when the index already shows there is nothing.
+        if (fCoinbaseType ? pindex->IsProofOfAudit() : pindex->nTx <= coinbaseIdx + 1) return none;
+
+        std::map<int, BlockOutputs>::iterator it = cache.find(nHeight);
+        if (it == cache.end()) {
+            it = cache.emplace(nHeight, BlockOutputs()).first;
+            CBlock block;
+            if (ReadBlockFromDisk(block, pindex) && block.vtx.size() > coinbaseIdx) {
+                if (block.posBlocksAudited.empty()) {
+                    const CTransaction& coinbase = block.vtx[coinbaseIdx];
+                    for (size_t n = 0; n < coinbase.vout.size(); n++) {
+                        const CTxOut& out = coinbase.vout[n];
+                        if (out.IsNull() || out.commitment.empty() || out.nValue <= 0 || out.IsEmpty()) continue;
+                        if (!IsRingMemberShape(out)) continue;
+                        it->second.coinbase.push_back(COutPoint(coinbase.GetHash(), n));
+                    }
+                }
+                for (size_t t = coinbaseIdx + 1; t < block.vtx.size(); t++) {
+                    const CTransaction& txOut = block.vtx[t];
+                    for (size_t n = 0; n < txOut.vout.size(); n++) {
+                        if (txOut.vout[n].commitment.empty() || !IsRingMemberShape(txOut.vout[n])) continue;
+                        it->second.other.push_back(COutPoint(txOut.GetHash(), n));
+                    }
+                }
+            }
+        }
+        return fCoinbaseType ? it->second.coinbase : it->second.other;
+    }
+
+    FastRandomContext& rng;
+    std::gamma_distribution<double> gamma;
+    int nTipHeight;
+    int64_t nSpacing;
+    int nYoungestOther;
+    int nYoungestCoinbase;
+    std::map<int, BlockOutputs> cache;
+};
+} // namespace
+
+static bool ChooseDecoys(CTransaction& tx, const std::vector<bool>& spendsCoinbase, std::set<COutPoint>& used,
+                         int ringSize, int64_t nMinDepth, FastRandomContext& rng)
+{
+    DecoyPicker picker(rng, nMinDepth);
+    for (size_t i = 0; i < tx.vin.size(); i++) {
+        while ((int)tx.vin[i].decoys.size() < ringSize) {
+            COutPoint outpoint;
+            if (!picker.Pick(spendsCoinbase[i], used, outpoint)) {
+                // A fresh regtest chain has almost no ordinary outputs, and a wallet's change
+                // is one, so its second spend would already fail and the chain could never
+                // get going. On regtest only, fall back to coinbase-type decoys. No other
+                // network does this.
+                if (spendsCoinbase[i] || Params().NetworkID() != CBaseChainParams::REGTEST || !picker.Pick(true, used, outpoint)) {
+                    LogPrintf("%s: not enough %s outputs to use as decoys for input %u\n", __func__,
+                              spendsCoinbase[i] ? "coinbase-type" : "ordinary", (unsigned int)i);
+                    return false;
+                }
+                LogPrintf("%s: regtest: coinbase-type decoy for ordinary input %u\n", __func__, (unsigned int)i);
+            }
+            tx.vin[i].decoys.push_back(outpoint);
+        }
+    }
+    LogPrintf("%s: read %u blocks\n", __func__, (unsigned int)picker.BlocksRead());
     return true;
 }
 
