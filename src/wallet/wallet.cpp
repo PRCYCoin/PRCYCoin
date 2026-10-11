@@ -4071,8 +4071,14 @@ bool CWallet::selectDecoysAndRealIndex(CTransaction& tx, int& myIndex, int ringS
                             }
                             //add new coinbase transaction to the pool
                             if (coinbaseDecoysPool.size() >= CWallet::MAX_DECOY_POOL) {
+                                // Evict a random existing entry to keep the pool bounded,
+                                // as the pool maintenance in ProcessNewBlock (main.cpp) does.
+                                // The victim used to be picked but never erased. Not reached
+                                // today, since this fill stops at about 100 entries, well
+                                // below MAX_DECOY_POOL, but wrong if those limits change.
                                 int selected = secp256k1_rand32() % CWallet::MAX_DECOY_POOL;
                                 std::map<COutPoint, uint256>::const_iterator it = std::next(coinbaseDecoysPool.begin(), selected);
+                                coinbaseDecoysPool.erase(it);
                                 coinbaseDecoysPool[newOutPoint] = p->GetBlockHash();
                             } else {
                                 coinbaseDecoysPool[newOutPoint] = p->GetBlockHash();
