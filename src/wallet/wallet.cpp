@@ -2910,7 +2910,7 @@ StakingStatusError CWallet::StakingCoinStatus(CAmount& minFee, CAmount& maxFee)
                 std::set<std::pair<const CWalletTx*, unsigned int> > setCoinsRet;
                 CAmount nValueRet;
                 //check whether need consolidation
-                int ringSize = MIN_RING_SIZE + secp256k1_rand32() % (MAX_RING_SIZE - MIN_RING_SIZE + 1);
+                int ringSize = MIN_RING_SIZE + GetRandInt(MAX_RING_SIZE - MIN_RING_SIZE + 1);
                 CAmount MaxFeeSpendingReserve = ComputeFee(1, 2, MAX_RING_SIZE);
                 CAmount estimatedFee = 0;
                 bool selectCoinRet = SelectCoinsMinConf(true, estimatedFee, ringSize, 2, nReserveBalance + MaxFeeSpendingReserve, 1, 6, vCoins, setCoinsRet, nValueRet);
@@ -3265,10 +3265,7 @@ bool CWallet::CreateTransactionBulletProof(const CKey& txPrivDes, const CPubKey&
     SetRingSize(0);
 
     //randomize ring size
-    unsigned char rand_seed[16];
-    memcpy(rand_seed, txPrivDes.begin(), 16);
-    secp256k1_rand_seed(rand_seed);
-    ringSize = MIN_RING_SIZE + secp256k1_rand32() % (MAX_RING_SIZE - MIN_RING_SIZE + 1);
+    ringSize = MIN_RING_SIZE + GetRandInt(MAX_RING_SIZE - MIN_RING_SIZE + 1);
 
     //Currently we only allow transaction with one or two recipients
     //If two, the second recipient is a change output
@@ -4145,6 +4142,9 @@ bool CWallet::selectDecoysAndRealIndex(CTransaction& tx, int& myIndex, int ringS
         return false;
     }
     LogPrintf("Selecting coinbase decoys for transaction\n");
+    // Every random choice in decoy selection comes from the node's RNG, not from
+    // secp256k1's test-suite RNG.
+    FastRandomContext rng;
     if (coinbaseDecoysPool.size() <= 100) {
         for (int i = chainActive.Height() - Params().COINBASE_MATURITY(); i > 0; i--) {
             if (coinbaseDecoysPool.size() > 100) break;
@@ -4161,7 +4161,7 @@ bool CWallet::selectDecoysAndRealIndex(CTransaction& tx, int& myIndex, int ringS
 
                 for (size_t i = 0; i < coinbase.vout.size(); i++) {
                     if (!coinbase.vout[i].IsNull() && !coinbase.vout[i].commitment.empty() && coinbase.vout[i].nValue > 0 && !coinbase.vout[i].IsEmpty()) {
-                        if ((secp256k1_rand32() % 100) <= CWallet::PROBABILITY_NEW_COIN_SELECTED) {
+                        if ((int)rng.randrange(100) <= CWallet::PROBABILITY_NEW_COIN_SELECTED) {
                             COutPoint newOutPoint(coinbase.GetHash(), i);
                             if (coinbaseDecoysPool.count(newOutPoint) == 1) {
                                 continue;
@@ -4171,8 +4171,14 @@ bool CWallet::selectDecoysAndRealIndex(CTransaction& tx, int& myIndex, int ringS
                             }
                             //add new coinbase transaction to the pool
                             if (coinbaseDecoysPool.size() >= CWallet::MAX_DECOY_POOL) {
-                                int selected = secp256k1_rand32() % CWallet::MAX_DECOY_POOL;
+                                // Evict a random existing entry to keep the pool bounded,
+                                // as the pool maintenance in ProcessNewBlock (main.cpp) does.
+                                // The victim used to be picked but never erased. Not reached
+                                // today, since this fill stops at about 100 entries, well
+                                // below MAX_DECOY_POOL, but wrong if those limits change.
+                                int selected = (int)rng.randrange(CWallet::MAX_DECOY_POOL);
                                 std::map<COutPoint, uint256>::const_iterator it = std::next(coinbaseDecoysPool.begin(), selected);
+                                coinbaseDecoysPool.erase(it);
                                 coinbaseDecoysPool[newOutPoint] = p->GetBlockHash();
                             } else {
                                 coinbaseDecoysPool[newOutPoint] = p->GetBlockHash();
@@ -4182,6 +4188,20 @@ bool CWallet::selectDecoysAndRealIndex(CTransaction& tx, int& myIndex, int ringS
                 }
             }
         }
+    }
+    // Snapshot the decoy pools once, before the per-input loop, into vectors.
+    // Picking a decoy previously used std::next(map.begin(), rand % size), which
+    // is O(size) on a std::map and was executed for every decoy of every input;
+    // indexing a vector is O(1). The merged (user + coinbase) set is also built
+    // a single time here instead of being copied for every input. The pools do
+    // not change during selection, so this is behaviour-preserving - the same
+    // element at ordinal position k is selected, just far more cheaply.
+    std::vector<std::pair<COutPoint, uint256> > coinbaseDecoys(coinbaseDecoysPool.begin(), coinbaseDecoysPool.end());
+    std::vector<std::pair<COutPoint, uint256> > mergedDecoys;
+    {
+        std::map<COutPoint, uint256> mergedMap = userDecoysPool;
+        mergedMap.insert(coinbaseDecoysPool.begin(), coinbaseDecoysPool.end());
+        mergedDecoys.assign(mergedMap.begin(), mergedMap.end());
     }
     //Choose decoys
     myIndex = -1;
@@ -4224,17 +4244,23 @@ bool CWallet::selectDecoysAndRealIndex(CTransaction& tx, int& myIndex, int ringS
         pendingKeyImages.push_back(ki.GetHex());
         int numDecoys = 0;
         if (txPrev.IsCoinAudit() || txPrev.IsCoinBase() || txPrev.IsCoinStake()) {
-            if ((int)coinbaseDecoysPool.size() >= ringSize * 5) {
+            if ((int)coinbaseDecoys.size() >= ringSize * 5) {
+                size_t attempts = 0;
+                const size_t maxAttempts = (size_t)ringSize * 5000;
                 while (numDecoys < ringSize) {
+                    if (++attempts > maxAttempts) {
+                        LogPrintf("Could not find enough usable coinbase decoys. Please wait approximately 10 minutes and try again.\n");
+                        return false;
+                    }
                     bool duplicated = false;
                     bool invalid = false;
-                    std::map<COutPoint, uint256>::const_iterator it = std::next(coinbaseDecoysPool.begin(), secp256k1_rand32() % coinbaseDecoysPool.size());
-                    if (mapBlockIndex.count(it->second) < 1) continue;
-                    CBlockIndex* atTheblock = mapBlockIndex[it->second];
+                    const std::pair<COutPoint, uint256>& entry = coinbaseDecoys[rng.randrange(coinbaseDecoys.size())];
+                    if (mapBlockIndex.count(entry.second) < 1) continue;
+                    CBlockIndex* atTheblock = mapBlockIndex[entry.second];
                     if (!atTheblock || !chainActive.Contains(atTheblock)) continue;
                     if (!chainActive.Contains(atTheblock)) continue;
                     if (1 + chainActive.Height() - atTheblock->nHeight < DecoyConfirmationMinimum) continue;
-                    COutPoint outpoint = it->first;
+                    COutPoint outpoint = entry.first;
                     for (size_t d = 0; d < tx.vin[i].decoys.size(); d++) {
                         if (tx.vin[i].decoys[d] == outpoint) {
                             duplicated = true;
@@ -4252,40 +4278,51 @@ bool CWallet::selectDecoysAndRealIndex(CTransaction& tx, int& myIndex, int ringS
                     tx.vin[i].decoys.push_back(outpoint);
                     numDecoys++;
                 }
-            } else if ((int)coinbaseDecoysPool.size() >= ringSize) {
-                for (size_t j = 0; j < coinbaseDecoysPool.size(); j++) {
-                    std::map<COutPoint, uint256>::const_iterator it = std::next(coinbaseDecoysPool.begin(), j);
-                    if (mapBlockIndex.count(it->second) < 1) continue;
-                    CBlockIndex* atTheblock = mapBlockIndex[it->second];
+            } else if ((int)coinbaseDecoys.size() >= ringSize) {
+                // Small-pool case: pick decoys from a Fisher-Yates shuffle of the pool
+                // rather than in the pool's own order. An invalid/blacklisted outpoint
+                // is skipped with `continue`, not `break`, so it does not truncate the
+                // ring.
+                std::vector<size_t> order(coinbaseDecoys.size());
+                for (size_t j = 0; j < order.size(); j++) order[j] = j;
+                for (size_t j = order.size(); j > 1; j--) {
+                    size_t k = rng.randrange(j);
+                    std::swap(order[j - 1], order[k]);
+                }
+                for (size_t t = 0; t < order.size() && numDecoys < ringSize; t++) {
+                    const std::pair<COutPoint, uint256>& entry = coinbaseDecoys[order[t]];
+                    if (mapBlockIndex.count(entry.second) < 1) continue;
+                    CBlockIndex* atTheblock = mapBlockIndex[entry.second];
                     if (!atTheblock || !chainActive.Contains(atTheblock)) continue;
                     if (!chainActive.Contains(atTheblock)) continue;
                     if (1 + chainActive.Height() - atTheblock->nHeight < DecoyConfirmationMinimum) continue;
-                    COutPoint outpoint = it->first;
-                    if (!ValidOutPoint(outpoint)) {
-                        break;
-                    }
+                    COutPoint outpoint = entry.first;
+                    if (!ValidOutPoint(outpoint)) continue;
                     tx.vin[i].decoys.push_back(outpoint);
                     numDecoys++;
-                    if (numDecoys == ringSize) break;
                 }
             } else {
                 LogPrintf("Not enough decoys. Please wait approximately 10 minutes and try again.\n");
                 return false;
             }
         } else {
-            std::map<COutPoint, uint256> decoySet = userDecoysPool;
-            decoySet.insert(coinbaseDecoysPool.begin(), coinbaseDecoysPool.end());
-            if ((int)decoySet.size() >= ringSize * 5) {
+            if ((int)mergedDecoys.size() >= ringSize * 5) {
+                size_t attempts = 0;
+                const size_t maxAttempts = (size_t)ringSize * 5000;
                 while (numDecoys < ringSize) {
+                    if (++attempts > maxAttempts) {
+                        LogPrintf("Could not find enough usable decoys. Please wait approximately 10 minutes and try again.\n");
+                        return false;
+                    }
                     bool duplicated = false;
                     bool invalid = false;
-                    std::map<COutPoint, uint256>::const_iterator it = std::next(decoySet.begin(), secp256k1_rand32() % decoySet.size());
-                    if (mapBlockIndex.count(it->second) < 1) continue;
-                    CBlockIndex* atTheblock = mapBlockIndex[it->second];
+                    const std::pair<COutPoint, uint256>& entry = mergedDecoys[rng.randrange(mergedDecoys.size())];
+                    if (mapBlockIndex.count(entry.second) < 1) continue;
+                    CBlockIndex* atTheblock = mapBlockIndex[entry.second];
                     if (!atTheblock || !chainActive.Contains(atTheblock)) continue;
                     if (!chainActive.Contains(atTheblock)) continue;
                     if (1 + chainActive.Height() - atTheblock->nHeight < DecoyConfirmationMinimum) continue;
-                    COutPoint outpoint = it->first;
+                    COutPoint outpoint = entry.first;
                     for (size_t d = 0; d < tx.vin[i].decoys.size(); d++) {
                         if (tx.vin[i].decoys[d] == outpoint) {
                             duplicated = true;
@@ -4303,21 +4340,25 @@ bool CWallet::selectDecoysAndRealIndex(CTransaction& tx, int& myIndex, int ringS
                     tx.vin[i].decoys.push_back(outpoint);
                     numDecoys++;
                 }
-            } else if ((int)decoySet.size() >= ringSize) {
-                for (size_t j = 0; j < decoySet.size(); j++) {
-                    std::map<COutPoint, uint256>::const_iterator it = std::next(decoySet.begin(), j);
-                    if (mapBlockIndex.count(it->second) < 1) continue;
-                    CBlockIndex* atTheblock = mapBlockIndex[it->second];
+            } else if ((int)mergedDecoys.size() >= ringSize) {
+                // Same as the coinbase branch above.
+                std::vector<size_t> order(mergedDecoys.size());
+                for (size_t j = 0; j < order.size(); j++) order[j] = j;
+                for (size_t j = order.size(); j > 1; j--) {
+                    size_t k = rng.randrange(j);
+                    std::swap(order[j - 1], order[k]);
+                }
+                for (size_t t = 0; t < order.size() && numDecoys < ringSize; t++) {
+                    const std::pair<COutPoint, uint256>& entry = mergedDecoys[order[t]];
+                    if (mapBlockIndex.count(entry.second) < 1) continue;
+                    CBlockIndex* atTheblock = mapBlockIndex[entry.second];
                     if (!atTheblock || !chainActive.Contains(atTheblock)) continue;
                     if (!chainActive.Contains(atTheblock)) continue;
                     if (1 + chainActive.Height() - atTheblock->nHeight < DecoyConfirmationMinimum) continue;
-                    COutPoint outpoint = it->first;
-                    if (!ValidOutPoint(outpoint)) {
-                        break;
-                    }
+                    COutPoint outpoint = entry.first;
+                    if (!ValidOutPoint(outpoint)) continue;
                     tx.vin[i].decoys.push_back(outpoint);
                     numDecoys++;
-                    if (numDecoys == ringSize) break;
                 }
             } else {
                 LogPrintf("Not enough decoys. Please wait approximately 10 minutes and try again.\n");
@@ -4325,7 +4366,18 @@ bool CWallet::selectDecoysAndRealIndex(CTransaction& tx, int& myIndex, int ringS
             }
         }
     }
-    myIndex = secp256k1_rand32() % (tx.vin[0].decoys.size() + 1) - 1;
+    // Every ring must be exactly ringSize. The small-pool branches stop when they run
+    // out of eligible candidates, so a ring can come up short (a high -decoyconfirm, a
+    // young chain). Fail here, before the real input is placed or any outpoint is queued.
+    for (size_t i = 0; i < tx.vin.size(); i++) {
+        if ((int)tx.vin[i].decoys.size() != ringSize) {
+            LogPrintf("%s: input %u has %u decoys, need %d\n", __func__, (unsigned int)i,
+                      (unsigned int)tx.vin[i].decoys.size(), ringSize);
+            return false;
+        }
+    }
+
+    myIndex = (int)rng.randrange(tx.vin[0].decoys.size() + 1) - 1;
 
     for (size_t i = 0; i < tx.vin.size(); i++) {
         COutPoint prevout = tx.vin[i].prevout;
@@ -5447,10 +5499,7 @@ bool CWallet::SendAll(std::string des, CWalletTx& wtxNew, bool inclLocked)
                 secret.MakeNewKey(true);
                 SetMinVersion(FEATURE_COMPRPUBKEY);
 
-                unsigned char rand_seed[16];
-                memcpy(rand_seed, secret.begin(), 16);
-                secp256k1_rand_seed(rand_seed);
-                int ringSize = MIN_RING_SIZE + secp256k1_rand32() % (MAX_RING_SIZE - MIN_RING_SIZE + 1);
+                int ringSize = MIN_RING_SIZE + GetRandInt(MAX_RING_SIZE - MIN_RING_SIZE + 1);
 
                 estimateTxSize = ComputeTxSize(vCoins.size(), 1, ringSize);
                 nFeeNeeded = GetMinimumFee(estimateTxSize, nTxConfirmTarget, mempool);
@@ -5696,7 +5745,7 @@ bool CWallet::CreateSweepingTransaction(CAmount target, CAmount threshold, uint3
                 }
             }
             SetRingSize(0);
-            int ringSize = MIN_RING_SIZE + secp256k1_rand32() % (MAX_RING_SIZE - MIN_RING_SIZE + 1);
+            int ringSize = MIN_RING_SIZE + GetRandInt(MAX_RING_SIZE - MIN_RING_SIZE + 1);
             if (vCoins.size() <= 1) return false;
             CAmount estimatedFee = ComputeFee(vCoins.size(), 1, ringSize);
             if (combineMode != CombineMode::ON && (vCoins.empty() || (vCoins.size() < MIN_TX_INPUTS_FOR_SWEEPING) || (total < target + estimatedFee && vCoins.size() <= MAX_TX_INPUTS))) {
