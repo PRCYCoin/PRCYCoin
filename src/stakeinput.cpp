@@ -11,12 +11,26 @@
 bool CPrcyStake::SetInput(CTransaction txPrev, unsigned int n)
 {
     this->txFrom = txPrev;
+    this->fHaveTxFrom = true;
+    this->hashFrom = txPrev.GetHash();
     this->nPosition = n;
+    return true;
+}
+
+bool CPrcyStake::SetPrevout(const COutPoint& prevout, const CTxOut& out, bool fCoinBaseOrStake)
+{
+    this->fHaveTxFrom = false;
+    this->hashFrom = prevout.hash;
+    this->nPosition = prevout.n;
+    this->outFrom = out;
+    this->fFromCoinBaseOrStake = fCoinBaseOrStake;
     return true;
 }
 
 bool CPrcyStake::GetTxFrom(CTransaction& tx)
 {
+    if (!fHaveTxFrom)
+        return false;
     tx = txFrom;
     return true;
 }
@@ -43,11 +57,13 @@ bool CPrcyStake::CreateTxIn(CWallet* pwallet, CTxIn& txIn, uint256 hashTxOut)
 
 CAmount CPrcyStake::GetValue()
 {
-    if (txFrom.IsCoinBase() || txFrom.IsCoinStake()) {
-        return txFrom.vout[nPosition].nValue;
+    if (fHaveTxFrom ? (txFrom.IsCoinBase() || txFrom.IsCoinStake()) : fFromCoinBaseOrStake) {
+        return fHaveTxFrom ? txFrom.vout[nPosition].nValue : outFrom.nValue;
     }
 
-    const CWalletTx* pWalletTx = pwalletMain->GetWalletTx(txFrom.GetHash());
+    if (!pwalletMain) // a coinstake that fails its check on a node without a wallet
+        return 0;
+    const CWalletTx* pWalletTx = pwalletMain->GetWalletTx(hashFrom);
     if (!pWalletTx) {
         return 0;
     }
@@ -136,7 +152,7 @@ CDataStream CPrcyStake::GetUniqueness()
 {
     //The unique identifier for a PRCY stake is the outpoint
     CDataStream ss(SER_NETWORK, 0);
-    ss << nPosition << txFrom.GetHash();
+    ss << nPosition << hashFrom;
     return ss;
 }
 
@@ -144,8 +160,10 @@ CDataStream CPrcyStake::GetUniqueness()
 CBlockIndex* CPrcyStake::GetIndexFrom()
 {
     uint256 hashBlock = 0;
-    CTransaction tx;
-    if (GetTransaction(txFrom.GetHash(), tx, hashBlock, true)) {
+    CTxOut out;
+    bool fTxFound = false;
+    GetOutput(COutPoint(hashFrom, nPosition), out, hashBlock, nullptr, nullptr, &fTxFound); // the transaction has to exist, as before
+    if (fTxFound) {
         // If the index is in the chain, then set it as the "index from"
         if (mapBlockIndex.count(hashBlock)) {
             CBlockIndex* pindex = mapBlockIndex.at(hashBlock);
@@ -153,7 +171,7 @@ CBlockIndex* CPrcyStake::GetIndexFrom()
                 pindexFrom = pindex;
         }
     } else {
-        LogPrintf("%s : failed to find tx %s\n", __func__, txFrom.GetHash().GetHex());
+        LogPrintf("%s : failed to find tx %s\n", __func__, hashFrom.GetHex());
     }
 
     return pindexFrom;
