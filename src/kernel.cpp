@@ -367,19 +367,20 @@ bool CheckProofOfStake(const CBlock block, uint256& hashProofOfStake, std::uniqu
     const CTxIn& txin = tx.vin[0];
 
     //Construct the stakeinput object
-    // First try finding the previous transaction in database
+    // First try finding the staked output
     uint256 hashBlock;
-    CTransaction txPrev;
-    if (!GetTransaction(txin.prevout.hash, txPrev, hashBlock, true))
+    CTxOut outPrev;
+    bool fCoinBase = false, fCoinStake = false;
+    if (!GetOutput(txin.prevout, outPrev, hashBlock, &fCoinBase, &fCoinStake))
         return error("%s : INFO: read txPrev failed, tx id prev: %s, block id %s",
                 __func__, txin.prevout.hash.GetHex(), block.GetHash().GetHex());
 
     //verify signature and script
-    if (!VerifyScript(txin.scriptSig, txPrev.vout[txin.prevout.n].scriptPubKey, STANDARD_SCRIPT_VERIFY_FLAGS, TransactionSignatureChecker(&tx, 0)))
+    if (!VerifyScript(txin.scriptSig, outPrev.scriptPubKey, STANDARD_SCRIPT_VERIFY_FLAGS, TransactionSignatureChecker(&tx, 0)))
         return error("%s : VerifySignature failed on coinstake %s", __func__, tx.GetHash().ToString().c_str());
 
     CPrcyStake* prcyInput = new CPrcyStake();
-    prcyInput->SetInput(txPrev, txin.prevout.n);
+    prcyInput->SetPrevout(txin.prevout, outPrev, fCoinBase || fCoinStake);
     stake = std::unique_ptr<CStakeInput>(prcyInput);
 
     //Get the
@@ -387,10 +388,17 @@ bool CheckProofOfStake(const CBlock block, uint256& hashProofOfStake, std::uniqu
     if (!pindexfrom)
         return error("%s : Failed to find the block index for stake origin", __func__);
 
-    // Read block header
-    CBlock blockfrom;
-    if (!ReadBlockFromDisk(blockfrom, pindexfrom->GetBlockPos()))
-        return error("%s : INFO: failed to find block", __func__);
+    // The stake origin's block time is in its block index entry, which holds the header; the
+    // block itself does not need to be read. -checkoutputindex still reads it to compare.
+    const unsigned int nBlockFromTime = pindexfrom->nTime;
+    if (fCheckOutputIndex) {
+        CBlock blockfrom;
+        if (!ReadBlockFromDisk(blockfrom, pindexfrom->GetBlockPos()))
+            return error("%s : INFO: failed to find block", __func__);
+        if (blockfrom.nTime != nBlockFromTime)
+            return error("%s : -checkoutputindex: block %s has time %u on disk but %u in the block index", __func__,
+                pindexfrom->GetBlockHash().ToString(), blockfrom.nTime, nBlockFromTime);
+    }
 
     uint256 bnTargetPerCoinDay;
     bnTargetPerCoinDay.SetCompact(block.nBits);
@@ -399,7 +407,6 @@ bool CheckProofOfStake(const CBlock block, uint256& hashProofOfStake, std::uniqu
     if (!stake->GetModifier(nStakeModifier))
         return error("%s : failed to get modifier for stake input\n", __func__);
 
-    unsigned int nBlockFromTime = blockfrom.nTime;
     unsigned int nTxTime = block.nTime;
 
     if (!Params().IsRegTestNet()) {
