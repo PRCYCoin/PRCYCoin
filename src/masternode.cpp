@@ -339,11 +339,9 @@ bool CMasternode::IsInputAssociatedWithPubkey(CTxIn& vin, CPubKey& pubkey) const
     CScript payee2;
     payee2 = GetScriptForDestination(pubkey);
 
-    CTransaction txVin;
+    CTxOut out;
     uint256 hash;
-    if (GetTransaction(vin.prevout.hash, txVin, hash, true)) {
-        if (vin.prevout.n >= txVin.vout.size()) return false;
-        CTxOut out = txVin.vout[vin.prevout.n];
+    if (GetOutput(vin.prevout, out, hash)) {
         CAmount amount;
         CKey decodedMask;
         CPubKey sharedSec(vin.encryptionKey.begin(), vin.encryptionKey.end());
@@ -661,8 +659,9 @@ bool CMasternodeBroadcast::CheckInputsAndAdd(int& nDoS)
     // verify that sig time is legit in past
     // should be at least not earlier than block when 1000 PRCY tx got MASTERNODE_MIN_CONFIRMATIONS
     uint256 hashBlock = UINT256_ZERO;
-    CTransaction tx2;
-    GetTransaction(vin.prevout.hash, tx2, hashBlock, true);
+    CTxOut out;
+    bool fTxFound = false;
+    GetOutput(vin.prevout, out, hashBlock, nullptr, nullptr, &fTxFound); // only the block is used, as before
     BlockMap::iterator mi = mapBlockIndex.find(hashBlock);
     if (mi != mapBlockIndex.end() && (*mi).second) {
         CBlockIndex* pMNIndex = (*mi).second;                                                        // block for 1000 PRCY tx -> 1 confirmation
