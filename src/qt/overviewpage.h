@@ -88,6 +88,7 @@ private:
     QSettings settings;
 
     void initSyncCircle(float percentOfParent);
+    void updateSyncAnimation();
     void moveSyncCircle(QWidget* anchor, QWidget* animated, int deltaRadius, float degreesPerSecond, float angleOffset=0);
     QRect getCircleGeometry(QWidget* parent, float ratioToParent);
 
