@@ -31,6 +31,7 @@
 #include "miner.h"
 #include "netbase.h"
 #include "net.h"
+#include "outputindex.h"
 #include "rpc/blockchain.h"
 #include "rpc/server.h"
 #include "script/standard.h"
@@ -237,6 +238,8 @@ void PrepareShutdown()
         pcoinsdbview = NULL;
         delete pblocktree;
         pblocktree = NULL;
+        delete poutputindex;
+        poutputindex = NULL;
     }
 #ifdef ENABLE_WALLET
     if (pwalletMain)
@@ -475,6 +478,7 @@ std::string HelpMessage(HelpMessageMode mode)
     if (GetBoolArg("-help-debug", false)) {
         strUsage += HelpMessageOpt("-checkblockindex", strprintf("Do a full consistency check for mapBlockIndex, setBlockIndexCandidates, chainActive and mapBlocksUnlinked occasionally. Also sets -checkmempool (default: %u)", Params(CBaseChainParams::MAIN).DefaultConsistencyChecks()));
         strUsage += HelpMessageOpt("-checkmempool=<n>", strprintf("Run checks every <n> transactions (default: %u)", Params(CBaseChainParams::MAIN).DefaultConsistencyChecks()));
+        strUsage += HelpMessageOpt("-checkoutputindex", "Check every output looked up through the output index against the block files, and stop the node on any difference (default: 0)");
         strUsage += HelpMessageOpt("-checkpoints", strprintf(_("Only accept block chain matching built-in checkpoints (default: %u)"), 1));
         strUsage += HelpMessageOpt("-dblogsize=<n>", strprintf(_("Flush database activity from memory pool to disk log every <n> megabytes (default: %u)"), 100));
         strUsage += HelpMessageOpt("-disablesafemode", strprintf(_("Disable safemode, override a real safe mode event (default: %u)"), 0));
@@ -1001,6 +1005,9 @@ bool AppInit2(bool isDaemon)
     // Checkmempool and checkblockindex default to true in regtest mode
     mempool.setSanityCheck(GetBoolArg("-checkmempool", Params().DefaultConsistencyChecks()));
     fCheckBlockIndex = GetBoolArg("-checkblockindex", Params().DefaultConsistencyChecks());
+    fCheckOutputIndex = GetBoolArg("-checkoutputindex", false);
+    if (fCheckOutputIndex)
+        LogPrintf("-checkoutputindex: every output-index lookup is checked against the block files\n");
     Checkpoints::fEnabled = GetBoolArg("-checkpoints", true);
 
     // -par=0 means autodetect, but nScriptCheckThreads==0 means no concurrency
@@ -1417,11 +1424,15 @@ bool AppInit2(bool isDaemon)
     if (nBlockTreeDBCache > (1 << 21) && !GetBoolArg("-txindex", true))
         nBlockTreeDBCache = (1 << 21); // block tree db cache shouldn't be larger than 2 MiB
     nTotalCache -= nBlockTreeDBCache;
+    // The output index gets a small cache of its own on top of -dbcache, so the split above is
+    // unchanged; its lookups are spread over the whole chain and a large cache would not help.
+    const int64_t nOutputIndexCache = 16 << 20;
     int64_t nCoinDBCache = std::min(nTotalCache / 2, (nTotalCache / 4) + (1 << 23)); // use 25%-50% of the remainder for disk cache
     nTotalCache -= nCoinDBCache;
     nCoinCacheUsage = nTotalCache; // the rest goes to in-memory cache
     LogPrintf("Cache configuration:\n");
     LogPrintf("* Using %.1fMiB for block index database\n", nBlockTreeDBCache * (1.0 / 1024 / 1024));
+    LogPrintf("* Using %.1fMiB for output index database\n", nOutputIndexCache * (1.0 / 1024 / 1024));
     LogPrintf("* Using %.1fMiB for chain state database\n", nCoinDBCache * (1.0 / 1024 / 1024));
     LogPrintf("* Using %.1fMiB for in-memory UTXO set\n", nCoinCacheUsage * (1.0 / 1024 / 1024));
 
@@ -1441,6 +1452,8 @@ bool AppInit2(bool isDaemon)
                 delete pcoinsdbview;
                 delete pcoinscatcher;
                 delete pblocktree;
+                delete poutputindex;
+                poutputindex = NULL;
 
                 pblocktree = new CBlockTreeDB(nBlockTreeDBCache, false, fReindex);
                 pcoinsdbview = new CCoinsViewDB(nCoinDBCache, false, fReindex);
@@ -1466,6 +1479,32 @@ bool AppInit2(bool isDaemon)
                 // (we're likely using a testnet datadir, or the other way around).
                 if (!mapBlockIndex.empty() && mapBlockIndex.count(Params().HashGenesisBlock()) == 0)
                     return UIError(_("Incorrect or no genesis block found. Wrong datadir for network?"));
+
+                // Open the output index; one that cannot be opened is rebuilt, and if that fails
+                // too the node runs without it, as it did before the index existed.
+                try {
+                    poutputindex = new COutputIndexDB(nOutputIndexCache, false, fReindex);
+                } catch (const std::exception& e) {
+                    LogPrintf("Cannot open the output index (%s); rebuilding it\n", e.what());
+                    try {
+                        poutputindex = new COutputIndexDB(nOutputIndexCache, false, true);
+                    } catch (const std::exception& e2) {
+                        LogPrintf("Cannot rebuild the output index (%s); running without it\n", e2.what());
+                        strMiscWarning = _("Warning: the output index could not be opened, see debug.log for details");
+                    }
+                }
+
+                // Bring the output index up to the loaded chain. A restart catches up on a few
+                // blocks here. A first start with it has every block to read, which carries on in
+                // ThreadOutputIndex() once the node is running rather than holding up startup
+                // (and its peers, whose clock samples would arrive late). This runs before
+                // InitBlockIndex() so a new chain's genesis block is recorded by ConnectTip() on an
+                // index that is already in step. A failure leaves the index unused for this run.
+                if (!SyncOutputIndex()) {
+                    if (ShutdownRequested()) break;
+                    LogPrintf("Warning: the output index could not be brought up to date; running without it\n");
+                    strMiscWarning = _("Warning: the output index could not be built, see debug.log for details");
+                }
 
                 // Initialize the block index (no-op if non-empty database was already loaded)
                 if (!InitBlockIndex()) {
@@ -2002,6 +2041,9 @@ bool AppInit2(bool isDaemon)
         StartTorControl(threadGroup);
 
     StartNode(threadGroup, scheduler);
+
+    // Finish building the output index, if SyncOutputIndex() left part of it, while the node runs.
+    threadGroup.create_thread(boost::bind(&TraceThread<void (*)()>, "outputindex", &ThreadOutputIndex));
 
 #ifdef ENABLE_WALLET
     // Generate coins in the background
