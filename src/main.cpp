@@ -5023,14 +5023,14 @@ bool ProcessNewBlock(CValidationState& state, CNode* pfrom, CBlock* pblock, CDis
             if ((int)pblock->vtx.size() > userTxStartIdx) {
                 for (int i = userTxStartIdx; i < (int)pblock->vtx.size(); i++) {
                     for (int j = 0; j < (int)pblock->vtx[i].vout.size(); j++) {
-                        if (!pblock->vtx[i].vout[j].commitment.empty() && (secp256k1_rand32() % 100) <= CWallet::PROBABILITY_NEW_COIN_SELECTED) {
+                        if (!pblock->vtx[i].vout[j].commitment.empty() && GetRandInt(100) <= CWallet::PROBABILITY_NEW_COIN_SELECTED) {
                             COutPoint newOutPoint(pblock->vtx[i].GetHash(), j);
                             if (pwalletMain->userDecoysPool.count(newOutPoint) == 1) {
                                 continue;
                             }
                             //add new user transaction to the pool
                             if ((int32_t)pwalletMain->userDecoysPool.size() >= CWallet::MAX_DECOY_POOL) {
-                                int selected = secp256k1_rand32() % CWallet::MAX_DECOY_POOL;
+                                int selected = GetRandInt(CWallet::MAX_DECOY_POOL);
                                 std::map<COutPoint, uint256>::const_iterator it = std::next(pwalletMain->userDecoysPool.begin(), selected);
                                 pwalletMain->userDecoysPool.erase(it->first);
                                 pwalletMain->userDecoysPool[newOutPoint] = pblock->GetHash();
@@ -5055,14 +5055,14 @@ bool ProcessNewBlock(CValidationState& state, CNode* pfrom, CBlock* pblock, CDis
                     if (b.posBlocksAudited.size() == 0) {
                         for (int i = 0; i < (int)coinbase.vout.size(); i++) {
                             if (!coinbase.vout[i].IsNull() && !coinbase.vout[i].commitment.empty() && coinbase.vout[i].nValue > 0 && !coinbase.vout[i].IsEmpty()) {
-                                if ((secp256k1_rand32() % 100) <= CWallet::PROBABILITY_NEW_COIN_SELECTED) {
+                                if (GetRandInt(100) <= CWallet::PROBABILITY_NEW_COIN_SELECTED) {
                                     COutPoint newOutPoint(coinbase.GetHash(), i);
                                     if (pwalletMain->coinbaseDecoysPool.count(newOutPoint) == 1) {
                                         continue;
                                     }
                                     //add new coinbase transaction to the pool
                                     if ((int)pwalletMain->coinbaseDecoysPool.size() >= CWallet::MAX_DECOY_POOL) {
-                                        int selected = secp256k1_rand32() % CWallet::MAX_DECOY_POOL;
+                                        int selected = GetRandInt(CWallet::MAX_DECOY_POOL);
                                         std::map<COutPoint, uint256>::const_iterator it = std::next(pwalletMain->coinbaseDecoysPool.begin(), selected);
                                         pwalletMain->coinbaseDecoysPool.erase(it->first);
                                         pwalletMain->coinbaseDecoysPool[newOutPoint] = pblock->GetHash();
