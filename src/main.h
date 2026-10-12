@@ -53,6 +53,7 @@ class CBlockIndex;
 class CBlockTreeDB;
 class CBloomFilter;
 class CInv;
+class COutputIndexDB;
 class CScriptCheck;
 class CValidationInterface;
 class CValidationState;
@@ -443,5 +444,16 @@ extern CCoinsViewCache* pcoinsTip;
 
 /** Global variable that points to the active block tree (protected by cs_main) */
 extern CBlockTreeDB* pblocktree;
+
+/** Global variable that points to the output index (protected by cs_main) */
+extern COutputIndexDB* poutputindex;
+
+/**
+ * Bring the output index in line with chainActive at startup. A restart catches up here; a
+ * first start, or a long gap, is left to ThreadOutputIndex().
+ */
+bool SyncOutputIndex();
+/** Build what SyncOutputIndex() left, a step at a time, while the node runs. */
+void ThreadOutputIndex();
 
 #endif // BITCOIN_MAIN_H
