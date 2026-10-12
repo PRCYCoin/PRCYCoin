@@ -1186,7 +1186,10 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn, bool fFromLoadWallet, CWalletD
 {
     uint256 hash = wtxIn.GetHash();
     const uint256& hashBlock = wtxIn.hashBlock;
-    CBlockIndex* p = mapBlockIndex[hashBlock];
+    // find(), not mapBlockIndex[]: that would add an empty entry for a block not loaded yet (during a reindex,
+    // the block of every transaction in the wallet), which block acceptance then has to skip over
+    BlockMap::iterator mi = mapBlockIndex.find(hashBlock);
+    CBlockIndex* p = mi != mapBlockIndex.end() ? mi->second : NULL;
     if (p) {
         for (CTxIn in : wtxIn.vin) {
             pblocktree->WriteKeyImage(in.keyImage.GetHex(), hashBlock);
