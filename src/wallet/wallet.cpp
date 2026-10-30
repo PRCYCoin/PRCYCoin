@@ -343,6 +343,14 @@ void CWallet::GenerateNewHDChain(std::string* phrase)
     if (!SetHDChain(newHdChain, false))
         throw std::runtime_error(std::string(__func__) + ": SetHDChain failed");
 
+    // A mnemonic we were given is a restore: its keys can be older than this wallet, so
+    // their creation time is unknown, as for an imported key, and rescans must not skip
+    // ahead to the restore date
+    if (!strMnemonic.empty()) {
+        fHDChainRestored = true;
+        nTimeFirstKey = 1; // 0 would be considered 'no value'
+    }
+
     if (phrase) {
         CreatePrivacyAccount(true);
     }
@@ -541,6 +549,10 @@ bool CWallet::RescanAfterUnlock(int fromHeight)
                 }
             }
         }
+        // Nothing to resume from (no scanned height, no wallet transaction on the chain):
+        // scan the tip only, as before, rather than the whole chain on every unlock
+        if (pindex == chainActive.Genesis())
+            pindex = chainActive.Tip();
     } else {
         LOCK2(cs_main, cs_wallet);
         //scan from a specific block height
@@ -2141,9 +2153,7 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
             explicit ScanningFlag(bool& fIn) : f(fIn) { f = true; }
             ~ScanningFlag() { f = false; }
         } scanning(fScanningWallet);
-        if (pindexStart == chainActive.Genesis()) {
-            pindex = chainActive.Tip();
-        } else if (height == -1) {
+        if (height == -1) {
             // no need to read and scan block, if block was created before
             // our wallet birthday (as adjusted for block time variability)
             while (pindex && nTimeFirstKey && (pindex->GetBlockTime() < (nTimeFirstKey - 7200))) {
@@ -6231,6 +6241,7 @@ void CWallet::SetNull()
     nNextResend = 0;
     nLastResend = 0;
     nTimeFirstKey = 0;
+    fHDChainRestored = false;
     fWalletUnlockStakingOnly = false;
 
     // Stake Settings
@@ -7003,8 +7014,8 @@ void CWallet::DeriveNewChildKey(uint32_t nAccountIndex, CKey& secretRet)
     CPubKey pubkey = secretRet.GetPubKey();
     assert(secretRet.VerifyPubKey(pubkey));
 
-    // store metadata
-    int64_t nCreationTime = GetTime();
+    // store metadata; 1 marks a key from a restored seed, whose real age is unknown
+    int64_t nCreationTime = fHDChainRestored ? 1 : GetTime();
     mapKeyMetadata[pubkey.GetID()] = CKeyMetadata(nCreationTime);
 
     if (!AddHDPubKey(childKey.Neuter(), false, nAccountIndex))

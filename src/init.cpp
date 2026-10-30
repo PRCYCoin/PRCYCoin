@@ -1682,7 +1682,13 @@ bool AppInit2(bool isDaemon)
                     strErrors << _("Cannot write default address") << "\n";
             }
 
-            pwalletMain->SetBestChain(chainActive.GetLocator());
+            // A wallet just restored with -mnemonic has its history in blocks it has not seen.
+            // Leave its best block at genesis, as the GUI's restore does, so that the rescan
+            // below goes through the whole chain.
+            if (pwalletMain->fHDChainRestored)
+                pwalletMain->SetBestChain(chainActive.GetLocator(chainActive.Genesis()));
+            else
+                pwalletMain->SetBestChain(chainActive.GetLocator());
         }
 
         LogPrintf("%s", strErrors.str());
