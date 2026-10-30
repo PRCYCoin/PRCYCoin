@@ -478,6 +478,8 @@ public:
     void SyncTransaction(const CTransaction& tx, const CBlock* pblock);
     bool AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pblock, bool fUpdate);
     bool EraseFromWallet(const uint256& hash);
+    //! Remove wtx's wtxOrdered entry. Call before erasing wtx from mapWallet.
+    void EraseFromWtxOrdered(CWalletTx& wtx);
     void ReorderWalletTransactions(std::map<std::pair<int,int>, CWalletTx*> &mapSorted, int64_t &maxOrderPos);
     void UpdateWalletTransactionOrder(std::map<std::pair<int,int>, CWalletTx*> &mapSorted, bool resetOrder);
     bool DeleteTransactions(std::vector<uint256> &removeTxs, bool fRescan = false);
@@ -818,6 +820,12 @@ public:
     std::string strFromAccount;
     int64_t nOrderPos; //! position in ordered transaction list
     char fSpent = false;
+
+    //! This transaction's entry in its wallet's wtxOrdered, valid only while
+    //! fInWtxOrdered. Memory only. wtxOrdered holds a raw pointer to the mapWallet
+    //! element, so the entry must go before the element does (CWallet::EraseFromWtxOrdered).
+    CWallet::TxItems::iterator itWtxOrdered;
+    bool fInWtxOrdered = false;
 
     // memory only
     mutable bool fDebitCached;
