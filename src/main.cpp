@@ -27,6 +27,7 @@
 #include "masternodeman.h"
 #include "merkleblock.h"
 #include "net.h"
+#include "outputindex.h"
 #include "poa.h"
 #include "swifttx.h"
 #include "txdb.h"
@@ -80,6 +81,7 @@ int nScriptCheckThreads = 0;
 std::atomic<bool> fImporting{false};
 std::atomic<bool> fReindex{false};
 bool fTxIndex = true;
+bool fCheckOutputIndex = false;
 bool fIsBareMultisigStd = true;
 bool fCheckBlockIndex = false;
 bool fVerifyingBlocks = false;
@@ -229,12 +231,9 @@ bool GetValueIn(const CCoinsViewCache& view, const CTransaction& tx, CAmount& nR
         for (unsigned int i = 0; i < tx.vin.size(); i++) {
             CAmount nValueIn = 0;
             uint256 hashBlock;
-            CTransaction txPrev;
-            if (!GetTransaction(tx.vin[i].prevout.hash, txPrev, hashBlock, true))
+            CTxOut out;
+            if (!GetOutput(tx.vin[i].prevout, out, hashBlock))
                 return error("%s : missing prevout for coinstake %s", __func__, tx.GetHash().GetHex());
-            if (tx.vin[i].prevout.n >= txPrev.vout.size())
-                return error("%s : prevout index out of range for coinstake %s", __func__, tx.GetHash().GetHex());
-            const CTxOut& out = txPrev.vout[tx.vin[i].prevout.n];
             if (out.nValue > 0) {
                 nResult += out.nValue;
             } else {
@@ -464,9 +463,11 @@ bool VerifyRingSignatureWithTxFee(const CTransaction& tx, CBlockIndex* pindex)
             decoysForIn.push_back(tx.vin[i].decoys[j]);
         }
         for (size_t j = 0; j < tx.vin[0].decoys.size() + 1; j++) {
-            CTransaction txPrev;
+            CTxOut prevOut;
             uint256 hashBlock;
-            if (!GetTransaction(decoysForIn[j].hash, txPrev, hashBlock)) {
+            bool fTxFound = false;
+            const bool fHaveOutput = GetOutput(decoysForIn[j], prevOut, hashBlock, nullptr, nullptr, &fTxFound, false);
+            if (!fTxFound) {
                 LogPrintf("Failed to find transaction %s\n", decoysForIn[j].hash.GetHex());
                 return false;
             }
@@ -487,11 +488,10 @@ bool VerifyRingSignatureWithTxFee(const CTransaction& tx, CBlockIndex* pindex)
                 }
             }
 
-            if (decoysForIn[j].n >= txPrev.vout.size()) {
+            if (!fHaveOutput) {
                 LogPrintf("%s: decoy output index out of range in tx %s\n", __func__, decoysForIn[j].hash.GetHex());
                 return false;
             }
-            const CTxOut& prevOut = txPrev.vout[decoysForIn[j].n];
             if (prevOut.commitment.size() < 33) {
                 LogPrintf("%s: decoy commitment too short in tx %s\n", __func__, decoysForIn[j].hash.GetHex());
                 return false;
@@ -1194,6 +1194,9 @@ CBlockIndex* FindForkInGlobalIndex(const CChain& chain, const CBlockLocator& loc
 
 CCoinsViewCache* pcoinsTip = NULL;
 CBlockTreeDB* pblocktree = NULL;
+COutputIndexDB* poutputindex = NULL;
+/** The block the output index is complete up to; NULL while it is not in use. */
+static CBlockIndex* pindexOutputIndexBest = NULL;
 
 //////////////////////////////////////////////////////////////////////////////
 //
@@ -1377,15 +1380,14 @@ bool AreInputsStandard(const CTransaction& tx, const CCoinsViewCache& mapInputs)
         return true; // coinbase has no inputs
 
     for (unsigned int i = 0; i < tx.vin.size(); i++) {
-        CTransaction txPrev;
+        CTxOut prev;
         uint256 hashBlockPrev;
-        if (!GetTransaction(tx.vin[i].prevout.hash, txPrev, hashBlockPrev)) {
-            continue; // previous transaction not in main chain
+        bool fTxFound = false;
+        if (!GetOutput(tx.vin[i].prevout, prev, hashBlockPrev, nullptr, nullptr, &fTxFound, false)) {
+            if (!fTxFound)
+                continue; // previous transaction not in main chain
+            return false; // it has no such output
         }
-        if (tx.vin[i].prevout.n >= txPrev.vout.size())
-            return false;
-
-        const CTxOut& prev = txPrev.vout[tx.vin[i].prevout.n];
 
         std::vector<std::vector<unsigned char> > vSolutions;
         txnouttype whichType;
@@ -1474,19 +1476,16 @@ int GetIXConfirmations(uint256 nTXHash)
 bool VerifyShnorrKeyImageTxIn(const CTxIn& txin, uint256 ctsHash)
 {
     COutPoint prevout = txin.prevout;
-    CTransaction prev;
+    CTxOut prev;
     uint256 bh;
-    if (!GetTransaction(prevout.hash, prev, bh, true)) {
-        return false;
-    }
-    if (prevout.n >= prev.vout.size()) {
-        LogPrintf("%s: prevout index out of range\n", __func__);
+    if (!GetOutput(prevout, prev, bh)) {
+        LogPrintf("%s: prevout not found\n", __func__);
         return false;
     }
     uint256 s(txin.s);
     unsigned char S[33];
     CPubKey P;
-    if (!ExtractPubKey(prev.vout[prevout.n].scriptPubKey, P)) {
+    if (!ExtractPubKey(prev.scriptPubKey, P)) {
         LogPrintf("%s: prevout is not pay-to-pubkey\n", __func__);
         return false;
     }
@@ -1609,14 +1608,18 @@ bool CheckHaveInputs(const CCoinsViewCache& view, const CTransaction& tx)
 
             alldecoys.push_back(tx.vin[i].prevout);
             for (size_t j = 0; j < alldecoys.size(); j++) {
-                CTransaction prev;
+                CTxOut prev;
                 uint256 bh;
-                if (!GetTransaction(alldecoys[j].hash, prev, bh, true)) {
+                bool fCoinBase = false, fCoinStake = false, fTxFound = false;
+                // Only the transaction has to exist here, as before; the output itself is read
+                // by the ring signature check.
+                GetOutput(alldecoys[j], prev, bh, &fCoinBase, &fCoinStake, &fTxFound);
+                if (!fTxFound) {
                     return false;
                 }
 
                 if (mapBlockIndex.count(bh) < 1) return false;
-                if (prev.IsCoinStake() || prev.IsCoinAudit() || prev.IsCoinBase()) {
+                if (fCoinStake || fCoinBase) { // IsCoinAudit() is the same test as IsCoinBase()
                     if (nSpendHeight - mapBlockIndex[bh]->nHeight < Params().COINBASE_MATURITY()) return false;
                 }
 
@@ -1747,9 +1750,11 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState& state, const CTransa
 
                 alldecoys.push_back(tx.vin[i].prevout);
                 for (size_t j = 0; j < alldecoys.size(); j++) {
-                    CTransaction prev;
+                    CTxOut prev;
                     uint256 bh;
-                    if (!GetTransaction(alldecoys[j].hash, prev, bh, true)) {
+                    bool fTxFound = false;
+                    GetOutput(alldecoys[j], prev, bh, nullptr, nullptr, &fTxFound); // only the transaction has to exist, as before
+                    if (!fTxFound) {
                         return false;
                     }
                     if (mapBlockIndex.count(bh) < 1) return false;
@@ -1969,9 +1974,11 @@ bool AcceptableInputs(CTxMemPool& pool, CValidationState& state, const CTransact
 
                 alldecoys.push_back(tx.vin[i].prevout);
                 for (size_t j = 0; j < alldecoys.size(); j++) {
-                    CTransaction prev;
+                    CTxOut prev;
                     uint256 bh;
-                    if (!GetTransaction(alldecoys[j].hash, prev, bh, true)) {
+                    bool fTxFound = false;
+                    GetOutput(alldecoys[j], prev, bh, nullptr, nullptr, &fTxFound); // only the transaction has to exist, as before
+                    if (!fTxFound) {
                         return false;
                     }
                     if (mapBlockIndex.count(bh) < 1) return false;
@@ -2865,20 +2872,22 @@ bool CheckInputs(const CTransaction& tx, CValidationState& state, const CCoinsVi
         if (tx.IsCoinStake()) {
             for (unsigned int i = 0; i < tx.vin.size(); i++) {
                 const COutPoint& prevout = tx.vin[i].prevout;
-                CTransaction prev;
+                CTxOut prev;
                 uint256 bh;
-                if (!GetTransaction(prevout.hash, prev, bh, true)) {
+                bool fCoinBase = false, fCoinStake = false, fTxFound = false;
+                GetOutput(prevout, prev, bh, &fCoinBase, &fCoinStake, &fTxFound); // the transaction has to exist, as before
+                if (!fTxFound) {
                     return state.Invalid(
                         error("CheckInputs() : Inputs not available"),
                         REJECT_INVALID, "bad-txns");
                 }
 
                 // If prev is coinbase, check that it's matured
-                if (prev.IsCoinBase() || prev.IsCoinStake()) {
+                if (fCoinBase || fCoinStake) {
                     if (nSpendHeight - mapBlockIndex[bh]->nHeight < Params().COINBASE_MATURITY())
                         return state.Invalid(
                             error("CheckInputs() : tried to spend coinbase at depth %d, coinstake=%d",
-                                nSpendHeight - mapBlockIndex[bh]->nHeight, prev.IsCoinStake()),
+                                nSpendHeight - mapBlockIndex[bh]->nHeight, fCoinStake),
                             REJECT_INVALID, "bad-txns-premature-spend-of-coinbase");
                 }
             }
@@ -2895,17 +2904,21 @@ bool CheckInputs(const CTransaction& tx, CValidationState& state, const CCoinsVi
         if (fScriptChecks && tx.IsCoinStake()) {
             for (unsigned int i = 0; i < tx.vin.size(); i++) {
                 const COutPoint& prevout = tx.vin[i].prevout;
-                CTransaction prev;
+                CTxOut prev;
                 uint256 bh;
-                if (!GetTransaction(prevout.hash, prev, bh, true)) {
+                bool fCoinBase = false, fCoinStake = false, fTxFound = false;
+                const bool fHaveOutput = GetOutput(prevout, prev, bh, &fCoinBase, &fCoinStake, &fTxFound);
+                if (!fTxFound) {
                     return state.Invalid(
                         error("CheckInputs() : Inputs not available"),
                         REJECT_INVALID, "bad-txns");
                 }
-                CCoins coins(prev, mapBlockIndex[bh]->nHeight);
+                // The script being spent. It used to come from CCoins(prevTx, height), which empties
+                // unspendable outputs; do the same.
+                const CScript scriptPrev = (fHaveOutput && !prev.scriptPubKey.IsUnspendable()) ? prev.scriptPubKey : CScript();
 
                 // Verify signature
-                CScriptCheck check(coins, tx, i, flags, cacheStore);
+                CScriptCheck check(scriptPrev, tx, i, flags, cacheStore);
                 if (pvChecks) {
                     pvChecks->push_back(CScriptCheck());
                     check.swap(pvChecks->back());
@@ -2917,7 +2930,7 @@ bool CheckInputs(const CTransaction& tx, CValidationState& state, const CCoinsVi
                         // arguments; if so, don't trigger DoS protection to
                         // avoid splitting the network between upgraded and
                         // non-upgraded nodes.
-                        CScriptCheck check(coins, tx, i,
+                        CScriptCheck check(scriptPrev, tx, i,
                             flags & ~STANDARD_NOT_MANDATORY_VERIFY_FLAGS, cacheStore);
                         if (check())
                             return state.Invalid(false, REJECT_NONSTANDARD,
@@ -3335,9 +3348,11 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
 
                 alldecoys.push_back(tx.vin[i].prevout);
                 for (size_t j = 0; j < alldecoys.size(); j++) {
-                    CTransaction prev;
+                    CTxOut prev;
                     uint256 bh;
-                    if (!GetTransaction(alldecoys[j].hash, prev, bh, true)) {
+                    bool fTxFound = false;
+                    GetOutput(alldecoys[j], prev, bh, nullptr, nullptr, &fTxFound); // only the transaction has to exist, as before
+                    if (!fTxFound) {
                         return false;
                     }
                     if (mapBlockIndex.count(bh) < 1) return false;
@@ -3621,6 +3636,410 @@ void static UpdateTip(CBlockIndex* pindexNew)
     }
 }
 
+//////////////////////////////////////////////////////////////////////////////
+//
+// Output index
+//
+
+/**
+ * Stop using the output index for the rest of this run. Lookups go to the block files as they
+ * did before the index existed, and SyncOutputIndex() repairs it at the next start (its
+ * best-block locator still names the last block it fully holds). The index is never a reason
+ * for the node to stop: nothing it does can change a validation result.
+ */
+static bool fOutputIndexDisabled = false;
+static void DisableOutputIndex(const std::string& strReason)
+{
+    if (!pindexOutputIndexBest)
+        return;
+    pindexOutputIndexBest = NULL;
+    fOutputIndexDisabled = true;
+    LogPrintf("Output index: %s; not using it until the next start\n", strReason);
+    strMiscWarning = _("Warning: the output index is not in use until restart, see debug.log for details");
+}
+
+/** Add pindexNew's outputs to the output index, once it has been connected. Never throws. */
+static void OutputIndexConnectTip(const CBlock& block, CBlockIndex* pindexNew)
+{
+    if (!poutputindex)
+        return;
+    if (pindexOutputIndexBest != pindexNew->pprev) {
+        // Out of step with the chain (it should never be); NULL before the genesis block is
+        // connected, which is in step.
+        if (pindexOutputIndexBest)
+            DisableOutputIndex(strprintf("it is at %s, not at the parent of %s",
+                pindexOutputIndexBest->GetBlockHash().ToString(), pindexNew->GetBlockHash().ToString()));
+        return;
+    }
+    try {
+        CDBBatch batch;
+        // ConnectBlock() does not connect the genesis block's transactions, so they are not
+        // indexed anywhere else either.
+        if (pindexNew->GetBlockHash() != Params().HashGenesisBlock())
+            COutputIndexDB::AddBlock(batch, block, pindexNew->nHeight, pindexNew->GetBlockHash());
+        COutputIndexDB::SetBestBlock(batch, chainActive.GetLocator(pindexNew));
+        poutputindex->WriteBatch(batch);
+    } catch (const std::exception& e) {
+        DisableOutputIndex(strprintf("failed to add block %s (%s)", pindexNew->GetBlockHash().ToString(), e.what()));
+        return;
+    }
+    pindexOutputIndexBest = pindexNew;
+}
+
+/** Remove pindexDelete's outputs from the output index, once it has been disconnected. Never throws. */
+static void OutputIndexDisconnectTip(const CBlock& block, CBlockIndex* pindexDelete)
+{
+    if (!poutputindex || !pindexOutputIndexBest)
+        return;
+    if (pindexOutputIndexBest != pindexDelete || !pindexDelete->pprev) {
+        DisableOutputIndex(strprintf("it is at %s, not at %s",
+            pindexOutputIndexBest->GetBlockHash().ToString(), pindexDelete->GetBlockHash().ToString()));
+        return;
+    }
+    try {
+        CDBBatch batch;
+        COutputIndexDB::RemoveBlock(batch, block);
+        COutputIndexDB::SetBestBlock(batch, chainActive.GetLocator(pindexDelete->pprev));
+        poutputindex->WriteBatch(batch);
+    } catch (const std::exception& e) {
+        DisableOutputIndex(strprintf("failed to remove block %s (%s)", pindexDelete->GetBlockHash().ToString(), e.what()));
+        return;
+    }
+    pindexOutputIndexBest = pindexDelete->pprev;
+}
+
+/** Output n of tx, in the form GetOutput() returns it. */
+static bool OutputFromTx(const CTransaction& tx, uint32_t n, CTxOut& txout, bool* pfCoinBase, bool* pfCoinStake, bool* pfTxFound)
+{
+    if (pfTxFound)
+        *pfTxFound = true;
+    if (pfCoinBase)
+        *pfCoinBase = tx.IsCoinBase();
+    if (pfCoinStake)
+        *pfCoinStake = tx.IsCoinStake();
+    if (n >= tx.vout.size())
+        return false;
+    txout = COutputIndexEntry(tx.vout[n]).ToTxOut();
+    return true;
+}
+
+static bool SameOutput(const COutputIndexEntry& a, const COutputIndexEntry& b)
+{
+    return a.nValue == b.nValue && a.scriptPubKey == b.scriptPubKey && a.commitment == b.commitment &&
+           a.amount == b.amount && a.mask == b.mask;
+}
+
+/** -checkoutputindex: lookups compared so far, for the periodic log line. */
+static uint64_t nOutputIndexChecks = 0;
+/** -checkoutputindex: a difference was found and the node is stopping. */
+static bool fOutputIndexCheckFailed = false;
+
+static void OutputIndexCheckFailed(const COutPoint& outpoint, const std::string& strProblem)
+{
+    const std::string strMessage = strprintf("Output index check failed for %s: %s", outpoint.ToString(), strProblem);
+    if (fOutputIndexCheckFailed) {
+        LogPrintf("%s\n", strMessage);
+        return;
+    }
+    fOutputIndexCheckFailed = true;
+    AbortNode(strMessage, _("Error: the output index gave a different answer from the block files. "
+                            "Please send debug.log to the developers."));
+}
+
+static void CountOutputIndexCheck()
+{
+    ++nOutputIndexChecks;
+    if (nOutputIndexChecks == 1000 || nOutputIndexChecks == 10000 || nOutputIndexChecks % 100000 == 0)
+        LogPrintf("-checkoutputindex: %u lookups checked against the block files, no differences\n", nOutputIndexChecks);
+}
+
+/**
+ * -checkoutputindex, for an output the index holds: GetTransaction() must find the same
+ * transaction in the same block, with output n present or absent alike and the same fields.
+ */
+static bool CheckIndexedOutput(const COutPoint& outpoint, const COutputIndexTx& rec, const uint256& hashBlock)
+{
+    CTransaction tx;
+    uint256 hashBlockTx;
+    if (!GetTransaction(outpoint.hash, tx, hashBlockTx, true)) {
+        OutputIndexCheckFailed(outpoint, "the index holds the transaction but the block files do not");
+        return false;
+    }
+    if (hashBlockTx != hashBlock) {
+        OutputIndexCheckFailed(outpoint, strprintf("index says block %s, block files say %s", hashBlock.ToString(), hashBlockTx.ToString()));
+        return false;
+    }
+    if (tx.vout.size() != rec.vout.size() || tx.IsCoinBase() != rec.fCoinBase || tx.IsCoinStake() != rec.fCoinStake) {
+        OutputIndexCheckFailed(outpoint, strprintf("index has %u outputs, coinbase %d, coinstake %d; block files have %u, %d, %d",
+            rec.vout.size(), rec.fCoinBase, rec.fCoinStake, tx.vout.size(), tx.IsCoinBase(), tx.IsCoinStake()));
+        return false;
+    }
+    if (outpoint.n < tx.vout.size() && !SameOutput(COutputIndexEntry(tx.vout[outpoint.n]), rec.vout[outpoint.n])) {
+        OutputIndexCheckFailed(outpoint, "the output's amount, script, commitment or encrypted amount differ");
+        return false;
+    }
+    CountOutputIndexCheck();
+    return true;
+}
+
+/**
+ * The old way: the transaction index and the block files (GetTransaction()). fIndexMissed: the
+ * index was asked and had no usable record, so finding the transaction in a block the index
+ * covers means the index is wrong.
+ */
+static bool GetOutputFromBlockFiles(const COutPoint& outpoint, CTxOut& txout, uint256& hashBlock, bool* pfCoinBase, bool* pfCoinStake, bool* pfTxFound, bool fAllowSlow, bool fIndexMissed)
+{
+    CTransaction tx;
+    uint256 hashBlockTx = hashBlock;
+    if (!GetTransaction(outpoint.hash, tx, hashBlockTx, fAllowSlow))
+        return false;
+    // The index holds every transaction in the blocks it covers, bar the genesis coinbase.
+    if (fIndexMissed && poutputindex && pindexOutputIndexBest) {
+        BlockMap::iterator mi = mapBlockIndex.find(hashBlockTx);
+        if (mi != mapBlockIndex.end() && mi->second && mi->second->pprev &&
+            pindexOutputIndexBest->GetAncestor(mi->second->nHeight) == mi->second) {
+            LogPrintf("%s: the output index has no record of %s, in block %d %s\n", __func__,
+                outpoint.hash.ToString(), mi->second->nHeight, hashBlockTx.ToString());
+            if (fCheckOutputIndex)
+                OutputIndexCheckFailed(outpoint, "missing from the index but in a block the index covers");
+        } else if (fCheckOutputIndex) {
+            CountOutputIndexCheck();
+        }
+    }
+    hashBlock = hashBlockTx;
+    return OutputFromTx(tx, outpoint.n, txout, pfCoinBase, pfCoinStake, pfTxFound);
+}
+
+bool GetOutput(const COutPoint& outpoint, CTxOut& txout, uint256& hashBlock, bool* pfCoinBase, bool* pfCoinStake, bool* pfTxFound, bool fAllowSlow)
+{
+    LOCK(cs_main);
+    if (pfTxFound)
+        *pfTxFound = false;
+
+    // The mempool first, as GetTransaction() does; it leaves hashBlock as it was.
+    CTransaction tx;
+    if (mempool.lookup(outpoint.hash, tx))
+        return OutputFromTx(tx, outpoint.n, txout, pfCoinBase, pfCoinStake, pfTxFound);
+
+    // Without the transaction index GetTransaction() answers differently (from the mempool, or
+    // for fAllowSlow from the coin database), so the index is only used alongside it.
+    COutputIndexTx rec;
+    bool fHaveRecord = false;
+    if (fTxIndex && poutputindex && pindexOutputIndexBest) {
+        try {
+            fHaveRecord = poutputindex->ReadTx(outpoint.hash, rec);
+        } catch (const std::exception& e) {
+            DisableOutputIndex(strprintf("failed to read %s (%s)", outpoint.hash.ToString(), e.what()));
+            if (fCheckOutputIndex)
+                OutputIndexCheckFailed(outpoint, "the output index could not be read");
+        }
+    }
+    if (fHaveRecord) {
+        CBlockIndex* pindex = pindexOutputIndexBest->GetAncestor(rec.nHeight);
+        if (!pindex || pindex->GetBlockHash() != rec.hashBlock) {
+            // A record from a block this node no longer has (see COutputIndexTx::hashBlock): not
+            // an answer; look in the block files instead.
+            LogPrintf("%s: ignoring an output index record for %s from block %s, which is not on the chain\n", __func__,
+                outpoint.hash.ToString(), rec.hashBlock.ToString());
+        } else {
+            const uint256 hashIndexed = rec.hashBlock;
+            if (fCheckOutputIndex && !CheckIndexedOutput(outpoint, rec, hashIndexed))
+                return GetOutputFromBlockFiles(outpoint, txout, hashBlock, pfCoinBase, pfCoinStake, pfTxFound, fAllowSlow, false); // the node is stopping; answer as before meanwhile
+            if (pfTxFound)
+                *pfTxFound = true;
+            hashBlock = hashIndexed;
+            if (pfCoinBase)
+                *pfCoinBase = rec.fCoinBase;
+            if (pfCoinStake)
+                *pfCoinStake = rec.fCoinStake;
+            if (outpoint.n >= rec.vout.size())
+                return false;
+            txout = rec.vout[outpoint.n].ToTxOut();
+            return true;
+        }
+    }
+
+    // Still in use here means the index was asked and had no usable record.
+    return GetOutputFromBlockFiles(outpoint, txout, hashBlock, pfCoinBase, pfCoinStake, pfTxFound, fAllowSlow, fTxIndex && poutputindex && pindexOutputIndexBest);
+}
+
+/** Throw the output index away and start an empty one. */
+static void WipeOutputIndex()
+{
+    const size_t nCacheSize = poutputindex->GetCacheSize();
+    const bool fMemory = poutputindex->IsMemory();
+    delete poutputindex;
+    poutputindex = NULL;
+    poutputindex = new COutputIndexDB(nCacheSize, fMemory, true);
+}
+
+/** Blocks SyncOutputIndex() adds at startup before leaving the rest to ThreadOutputIndex(). */
+static const int OUTPUT_INDEX_STARTUP_BLOCKS = 1000;
+/** Set by SyncOutputIndex() when ThreadOutputIndex() has blocks left to add. */
+static std::atomic<bool> fOutputIndexBuildPending{false};
+
+/**
+ * One step towards an output index in line with chainActive: take out the blocks it holds that
+ * have left the chain, then add up to nMaxBlocks of the blocks it is missing. When it reaches
+ * the tip it is put in use (pindexOutputIndexBest) and fDone is set. cs_main is held for the
+ * step only, so a long build runs alongside the node, which meanwhile looks outputs up in the
+ * block files as it did before the index existed.
+ */
+static bool SyncOutputIndexStep(int nMaxBlocks, bool& fDone)
+{
+    fDone = false;
+    LOCK(cs_main);
+    if (!poutputindex || pindexOutputIndexBest || fOutputIndexDisabled) {
+        fDone = true;
+        return true;
+    }
+
+    // An index written by another version, or one with records but no best block: start again.
+    int nVersion = 0;
+    CBlockLocator locator;
+    if (!poutputindex->ReadBestBlock(locator))
+        locator.SetNull();
+    if (!poutputindex->ReadVersion(nVersion) || nVersion != COutputIndexDB::CURRENT_VERSION ||
+        (locator.IsNull() && !poutputindex->IsEmpty())) {
+        if (!poutputindex->IsEmpty()) {
+            LogPrintf("SyncOutputIndex: the output index is from another version or incomplete; rebuilding it\n");
+            WipeOutputIndex();
+        }
+        locator.SetNull();
+        CDBBatch batch;
+        COutputIndexDB::SetVersion(batch);
+        if (!poutputindex->WriteBatch(batch, true))
+            return error("SyncOutputIndex: failed to write the output index");
+    }
+    if (!chainActive.Tip()) {
+        fDone = true; // nothing loaded yet (a new chain, or a reindex): ConnectTip() takes it from the genesis block
+        return true;
+    }
+
+    // The last block on the active chain the index is complete up to (NULL: none, start from the
+    // genesis block). After a crash the index can be ahead of the coin database, or name blocks
+    // the block index lost, which is why it keeps a locator rather than a single hash.
+    CBlockIndex* pindex = locator.IsNull() ? NULL : FindForkInGlobalIndex(chainActive, locator);
+
+    // Blocks it holds past that point that this node still has (a reorg the coin database did
+    // not get to write, or one during a background build): take their records out. Records of
+    // blocks the node no longer has stay, but no lookup uses them (COutputIndexTx::hashBlock)
+    // and reconnecting a block rewrites them.
+    if (pindex && !locator.IsNull()) {
+        BlockMap::iterator mi = mapBlockIndex.find(locator.vHave[0]);
+        CBlockIndex* pindexOld = mi != mapBlockIndex.end() ? mi->second : NULL;
+        if (pindexOld && pindexOld != pindex && pindexOld->GetAncestor(pindex->nHeight) == pindex) {
+            CDBBatch batch;
+            for (CBlockIndex* p = pindexOld; p != pindex; p = p->pprev) {
+                CBlock block;
+                if (!ReadBlockFromDisk(block, p))
+                    break; // its records stay behind, unused
+                COutputIndexDB::RemoveBlock(batch, block);
+                LogPrintf("SyncOutputIndex: removing block %d %s from the output index\n", p->nHeight, p->GetBlockHash().ToString());
+            }
+            COutputIndexDB::SetBestBlock(batch, chainActive.GetLocator(pindex));
+            if (!poutputindex->WriteBatch(batch))
+                return error("SyncOutputIndex: failed to write the output index");
+        }
+    }
+
+    // Add up to nMaxBlocks of the blocks it is missing, in batches of up to 1000 blocks or
+    // 100,000 outputs (some tens of MB), each ending with the best-block record, so that a
+    // shutdown or crash part-way loses at most one batch.
+    CBlockIndex* pnext = pindex ? chainActive.Next(pindex) : chainActive.Genesis();
+    int nAdded = 0;
+    while (pnext && nAdded < nMaxBlocks) {
+        CDBBatch batch;
+        size_t nOutputsInBatch = 0;
+        for (int nInBatch = 0; pnext && nInBatch < 1000 && nAdded < nMaxBlocks && nOutputsInBatch < 100000; nInBatch++, nAdded++) {
+            CBlock block;
+            if (!ReadBlockFromDisk(block, pnext))
+                return error("SyncOutputIndex: failed to read block %d %s", pnext->nHeight, pnext->GetBlockHash().ToString());
+            if (pnext->GetBlockHash() != Params().HashGenesisBlock())
+                COutputIndexDB::AddBlock(batch, block, pnext->nHeight, pnext->GetBlockHash());
+            for (const CTransaction& tx : block.vtx)
+                nOutputsInBatch += tx.vout.size();
+            pindex = pnext;
+            pnext = chainActive.Next(pnext);
+        }
+        COutputIndexDB::SetBestBlock(batch, chainActive.GetLocator(pindex));
+        if (!poutputindex->WriteBatch(batch))
+            return error("SyncOutputIndex: failed to write the output index");
+    }
+
+    static int64_t nLastLog = 0;
+    if (pnext) {
+        if (GetTime() - nLastLog >= 10) {
+            nLastLog = GetTime();
+            LogPrintf("SyncOutputIndex: output index at height %d of %d (%d%%)\n", pindex->nHeight, chainActive.Height(),
+                (int)((int64_t)pindex->nHeight * 100 / std::max(1, chainActive.Height())));
+        }
+        return true; // more to do
+    }
+
+    pindexOutputIndexBest = chainActive.Tip();
+    LogPrintf("SyncOutputIndex: output index is at height %d %s\n", pindexOutputIndexBest->nHeight, pindexOutputIndexBest->GetBlockHash().ToString());
+    fDone = true;
+    return true;
+}
+
+bool SyncOutputIndex()
+{
+    {
+        LOCK(cs_main);
+        pindexOutputIndexBest = NULL;
+        fOutputIndexDisabled = false;
+    }
+    try {
+        bool fDone = false;
+        if (!SyncOutputIndexStep(OUTPUT_INDEX_STARTUP_BLOCKS, fDone))
+            return false;
+        // A restart only has a few blocks to catch up, done by now. A first start, or a long gap,
+        // continues in ThreadOutputIndex() so that startup does not wait for it.
+        fOutputIndexBuildPending = !fDone;
+        if (!fDone)
+            LogPrintf("SyncOutputIndex: building the rest of the output index in the background; until it is done, outputs are looked up in the block files\n");
+        return true;
+    } catch (const std::exception& e) {
+        LOCK(cs_main);
+        pindexOutputIndexBest = NULL;
+        return error("%s: %s", __func__, e.what());
+    }
+}
+
+void ThreadOutputIndex()
+{
+    if (!fOutputIndexBuildPending)
+        return;
+    const int64_t nStart = GetTime();
+    try {
+        while (true) {
+            if (ShutdownRequested()) {
+                LogPrintf("ThreadOutputIndex: stopped; the output index carries on from where it was at the next start\n");
+                break;
+            }
+            bool fDone = false;
+            if (!SyncOutputIndexStep(1000, fDone)) {
+                LogPrintf("ThreadOutputIndex: building the output index failed; running without it until the next start\n");
+                break;
+            }
+            if (fDone) {
+                LogPrintf("ThreadOutputIndex: output index built in %d seconds\n", GetTime() - nStart);
+                break;
+            }
+            // Let the threads waiting on cs_main in between steps; also an interruption point.
+            MilliSleep(10);
+        }
+    } catch (const boost::thread_interrupted&) {
+        LogPrintf("ThreadOutputIndex: stopped; the output index carries on from where it was at the next start\n");
+        fOutputIndexBuildPending = false;
+        throw;
+    } catch (const std::exception& e) {
+        LogPrintf("ThreadOutputIndex: %s; running without the output index until the next start\n", e.what());
+    }
+    fOutputIndexBuildPending = false;
+}
+
 /** Disconnect chainActive's tip. */
 bool static DisconnectTip(CValidationState& state)
 {
@@ -3639,6 +4058,7 @@ bool static DisconnectTip(CValidationState& state)
             return error("DisconnectTip() : DisconnectBlock %s failed", pindexDelete->GetBlockHash().ToString());
         assert(view.Flush());
     }
+    OutputIndexDisconnectTip(block, pindexDelete);
     LogPrint(BCLog::BENCH, "- Disconnect block: %.2fms\n", (GetTimeMicros() - nStart) * 0.001);
     // Write the chain state to disk, if necessary.
     if (!FlushStateToDisk(state, FLUSH_STATE_ALWAYS))
@@ -3713,6 +4133,7 @@ bool static ConnectTip(CValidationState& state, CBlockIndex* pindexNew, CBlock* 
             nTimeConnectTotal * 0.000001);
         assert(view.Flush());
     }
+    OutputIndexConnectTip(*pblock, pindexNew);
     int64_t nTime4 = GetTimeMicros();
     nTimeFlush += nTime4 - nTime3;
     LogPrint(BCLog::BENCH, "  - Flush: %.2fms [%.2fs]\n", (nTime4 - nTime3) * 0.001, nTimeFlush * 0.000001);
@@ -3817,9 +4238,11 @@ void RemoveInvalidTransactionsFromMempool()
             std::vector<COutPoint> decoys = tx.vin[i].decoys;
             decoys.push_back(tx.vin[i].prevout);
             for (size_t j = 0; j < decoys.size(); j++) {
-                CTransaction txPrev;
+                CTxOut prevOut;
                 uint256 hashBlock;
-                if (!GetTransaction(decoys[j].hash, txPrev, hashBlock)) {
+                bool fTxFound = false;
+                GetOutput(decoys[j], prevOut, hashBlock, nullptr, nullptr, &fTxFound, false); // only the transaction has to exist, as before
+                if (!fTxFound) {
                     tobeRemoveds.push_back(tx);
                     needsBreak = true;
                     break;
@@ -5510,6 +5933,7 @@ void UnloadBlockIndex()
     LOCK(cs_main);
     setBlockIndexCandidates.clear();
     chainActive.SetTip(NULL);
+    pindexOutputIndexBest = NULL; // points into the block index being unloaded
     pindexBestInvalid = NULL;
     pindexBestHeader = NULL;
     mempool.clear();
