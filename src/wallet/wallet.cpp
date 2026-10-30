@@ -548,7 +548,9 @@ bool CWallet::RescanAfterUnlock(int fromHeight)
         }
     }
 
-    ScanForWalletTransactions(pindex, true, fromHeight != 0?pindex->nHeight:-1);
+    // An explicit height goes in `height`, which makes the scan start there instead of
+    // skipping ahead to the wallet's first key; 0 (an unlock) keeps that skip.
+    ScanForWalletTransactions(pindex, true, false, fromHeight != 0 ? pindex->nHeight : -1);
     return true;
 }
 
