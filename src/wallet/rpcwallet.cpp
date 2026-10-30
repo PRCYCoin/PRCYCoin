@@ -3063,6 +3063,8 @@ UniValue rescanwallettransactions(const UniValue& params, bool fHelp) {
     if (params.size() == 1) {
         nHeight = params[0].get_int();
     }
+    if (nHeight < 0)
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Block height cannot be negative");
     if (!pwalletMain->RescanAfterUnlock(nHeight)) {
         return "Failed to rescan";
     }
