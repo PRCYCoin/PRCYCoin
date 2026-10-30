@@ -1684,6 +1684,9 @@ bool AppInit2(bool isDaemon)
             }
         }
 
+        // A -rescanheight is passed on to the scan as its height, so the scan starts
+        // there instead of skipping ahead to the wallet's first key
+        int nRescanHeight = -1;
         if (GetBoolArg("-rescan", false)) {
             pindexRescan = chainActive.Genesis();
 
@@ -1694,6 +1697,7 @@ bool AppInit2(bool isDaemon)
                 } else {
                     pindexRescan = chainActive[rescanHeight];
                 }
+                nRescanHeight = pindexRescan->nHeight;
             }
         } else {
             CWalletDB walletdb(strWalletFile);
@@ -1715,7 +1719,7 @@ bool AppInit2(bool isDaemon)
             uiInterface.InitMessage(_("Rescanning..."));
             LogPrintf("Rescanning last %i blocks (from block %i)...\n", chainActive.Height() - pindexRescan->nHeight, pindexRescan->nHeight);
             const int64_t nWalletRescanTime = GetTimeMillis();
-            if (pwalletMain->ScanForWalletTransactions(pindexRescan, true, true) == -1) {
+            if (pwalletMain->ScanForWalletTransactions(pindexRescan, true, true, nRescanHeight) == -1) {
                 return error("Shutdown requested over the txs scan. Exiting.");
             }
             LogPrintf("Rescan completed in %15dms\n", GetTimeMillis() - nWalletRescanTime);
