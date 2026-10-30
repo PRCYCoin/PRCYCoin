@@ -27,6 +27,7 @@
 #include "masternodeman.h"
 #include "merkleblock.h"
 #include "net.h"
+#include "outputindex.h"
 #include "poa.h"
 #include "swifttx.h"
 #include "txdb.h"
@@ -1194,6 +1195,9 @@ CBlockIndex* FindForkInGlobalIndex(const CChain& chain, const CBlockLocator& loc
 
 CCoinsViewCache* pcoinsTip = NULL;
 CBlockTreeDB* pblocktree = NULL;
+COutputIndexDB* poutputindex = NULL;
+/** The block the output index is complete up to; NULL while it is not in use. */
+static CBlockIndex* pindexOutputIndexBest = NULL;
 
 //////////////////////////////////////////////////////////////////////////////
 //
@@ -3621,6 +3625,255 @@ void static UpdateTip(CBlockIndex* pindexNew)
     }
 }
 
+//////////////////////////////////////////////////////////////////////////////
+//
+// Output index
+//
+
+/**
+ * Stop using the output index for the rest of this run. Lookups go to the block files as they
+ * did before the index existed, and SyncOutputIndex() repairs it at the next start (its
+ * best-block locator still names the last block it fully holds). The index is never a reason
+ * for the node to stop: nothing it does can change a validation result.
+ */
+static bool fOutputIndexDisabled = false;
+static void DisableOutputIndex(const std::string& strReason)
+{
+    if (!pindexOutputIndexBest)
+        return;
+    pindexOutputIndexBest = NULL;
+    fOutputIndexDisabled = true;
+    LogPrintf("Output index: %s; not using it until the next start\n", strReason);
+    strMiscWarning = _("Warning: the output index is not in use until restart, see debug.log for details");
+}
+
+/** Add pindexNew's outputs to the output index, once it has been connected. Never throws. */
+static void OutputIndexConnectTip(const CBlock& block, CBlockIndex* pindexNew)
+{
+    if (!poutputindex)
+        return;
+    if (pindexOutputIndexBest != pindexNew->pprev) {
+        // Out of step with the chain (it should never be); NULL before the genesis block is
+        // connected, which is in step.
+        if (pindexOutputIndexBest)
+            DisableOutputIndex(strprintf("it is at %s, not at the parent of %s",
+                pindexOutputIndexBest->GetBlockHash().ToString(), pindexNew->GetBlockHash().ToString()));
+        return;
+    }
+    try {
+        CDBBatch batch;
+        // ConnectBlock() does not connect the genesis block's transactions, so they are not
+        // indexed anywhere else either.
+        if (pindexNew->GetBlockHash() != Params().HashGenesisBlock())
+            COutputIndexDB::AddBlock(batch, block, pindexNew->nHeight, pindexNew->GetBlockHash());
+        COutputIndexDB::SetBestBlock(batch, chainActive.GetLocator(pindexNew));
+        poutputindex->WriteBatch(batch);
+    } catch (const std::exception& e) {
+        DisableOutputIndex(strprintf("failed to add block %s (%s)", pindexNew->GetBlockHash().ToString(), e.what()));
+        return;
+    }
+    pindexOutputIndexBest = pindexNew;
+}
+
+/** Remove pindexDelete's outputs from the output index, once it has been disconnected. Never throws. */
+static void OutputIndexDisconnectTip(const CBlock& block, CBlockIndex* pindexDelete)
+{
+    if (!poutputindex || !pindexOutputIndexBest)
+        return;
+    if (pindexOutputIndexBest != pindexDelete || !pindexDelete->pprev) {
+        DisableOutputIndex(strprintf("it is at %s, not at %s",
+            pindexOutputIndexBest->GetBlockHash().ToString(), pindexDelete->GetBlockHash().ToString()));
+        return;
+    }
+    try {
+        CDBBatch batch;
+        COutputIndexDB::RemoveBlock(batch, block);
+        COutputIndexDB::SetBestBlock(batch, chainActive.GetLocator(pindexDelete->pprev));
+        poutputindex->WriteBatch(batch);
+    } catch (const std::exception& e) {
+        DisableOutputIndex(strprintf("failed to remove block %s (%s)", pindexDelete->GetBlockHash().ToString(), e.what()));
+        return;
+    }
+    pindexOutputIndexBest = pindexDelete->pprev;
+}
+
+/** Throw the output index away and start an empty one. */
+static void WipeOutputIndex()
+{
+    const size_t nCacheSize = poutputindex->GetCacheSize();
+    const bool fMemory = poutputindex->IsMemory();
+    delete poutputindex;
+    poutputindex = NULL;
+    poutputindex = new COutputIndexDB(nCacheSize, fMemory, true);
+}
+
+/** Blocks SyncOutputIndex() adds at startup before leaving the rest to ThreadOutputIndex(). */
+static const int OUTPUT_INDEX_STARTUP_BLOCKS = 1000;
+/** Set by SyncOutputIndex() when ThreadOutputIndex() has blocks left to add. */
+static std::atomic<bool> fOutputIndexBuildPending{false};
+
+/**
+ * One step towards an output index in line with chainActive: take out the blocks it holds that
+ * have left the chain, then add up to nMaxBlocks of the blocks it is missing. When it reaches
+ * the tip it is put in use (pindexOutputIndexBest) and fDone is set. cs_main is held for the
+ * step only, so a long build runs alongside the node, which meanwhile looks outputs up in the
+ * block files as it did before the index existed.
+ */
+static bool SyncOutputIndexStep(int nMaxBlocks, bool& fDone)
+{
+    fDone = false;
+    LOCK(cs_main);
+    if (!poutputindex || pindexOutputIndexBest || fOutputIndexDisabled) {
+        fDone = true;
+        return true;
+    }
+
+    // An index written by another version, or one with records but no best block: start again.
+    int nVersion = 0;
+    CBlockLocator locator;
+    if (!poutputindex->ReadBestBlock(locator))
+        locator.SetNull();
+    if (!poutputindex->ReadVersion(nVersion) || nVersion != COutputIndexDB::CURRENT_VERSION ||
+        (locator.IsNull() && !poutputindex->IsEmpty())) {
+        if (!poutputindex->IsEmpty()) {
+            LogPrintf("SyncOutputIndex: the output index is from another version or incomplete; rebuilding it\n");
+            WipeOutputIndex();
+        }
+        locator.SetNull();
+        CDBBatch batch;
+        COutputIndexDB::SetVersion(batch);
+        if (!poutputindex->WriteBatch(batch, true))
+            return error("SyncOutputIndex: failed to write the output index");
+    }
+    if (!chainActive.Tip()) {
+        fDone = true; // nothing loaded yet (a new chain, or a reindex): ConnectTip() takes it from the genesis block
+        return true;
+    }
+
+    // The last block on the active chain the index is complete up to (NULL: none, start from the
+    // genesis block). After a crash the index can be ahead of the coin database, or name blocks
+    // the block index lost, which is why it keeps a locator rather than a single hash.
+    CBlockIndex* pindex = locator.IsNull() ? NULL : FindForkInGlobalIndex(chainActive, locator);
+
+    // Blocks it holds past that point that this node still has (a reorg the coin database did
+    // not get to write, or one during a background build): take their records out. Records of
+    // blocks the node no longer has stay, but no lookup uses them (COutputIndexTx::hashBlock)
+    // and reconnecting a block rewrites them.
+    if (pindex && !locator.IsNull()) {
+        BlockMap::iterator mi = mapBlockIndex.find(locator.vHave[0]);
+        CBlockIndex* pindexOld = mi != mapBlockIndex.end() ? mi->second : NULL;
+        if (pindexOld && pindexOld != pindex && pindexOld->GetAncestor(pindex->nHeight) == pindex) {
+            CDBBatch batch;
+            for (CBlockIndex* p = pindexOld; p != pindex; p = p->pprev) {
+                CBlock block;
+                if (!ReadBlockFromDisk(block, p))
+                    break; // its records stay behind, unused
+                COutputIndexDB::RemoveBlock(batch, block);
+                LogPrintf("SyncOutputIndex: removing block %d %s from the output index\n", p->nHeight, p->GetBlockHash().ToString());
+            }
+            COutputIndexDB::SetBestBlock(batch, chainActive.GetLocator(pindex));
+            if (!poutputindex->WriteBatch(batch))
+                return error("SyncOutputIndex: failed to write the output index");
+        }
+    }
+
+    // Add up to nMaxBlocks of the blocks it is missing, in batches of up to 1000 blocks or
+    // 100,000 outputs (some tens of MB), each ending with the best-block record, so that a
+    // shutdown or crash part-way loses at most one batch.
+    CBlockIndex* pnext = pindex ? chainActive.Next(pindex) : chainActive.Genesis();
+    int nAdded = 0;
+    while (pnext && nAdded < nMaxBlocks) {
+        CDBBatch batch;
+        size_t nOutputsInBatch = 0;
+        for (int nInBatch = 0; pnext && nInBatch < 1000 && nAdded < nMaxBlocks && nOutputsInBatch < 100000; nInBatch++, nAdded++) {
+            CBlock block;
+            if (!ReadBlockFromDisk(block, pnext))
+                return error("SyncOutputIndex: failed to read block %d %s", pnext->nHeight, pnext->GetBlockHash().ToString());
+            if (pnext->GetBlockHash() != Params().HashGenesisBlock())
+                COutputIndexDB::AddBlock(batch, block, pnext->nHeight, pnext->GetBlockHash());
+            for (const CTransaction& tx : block.vtx)
+                nOutputsInBatch += tx.vout.size();
+            pindex = pnext;
+            pnext = chainActive.Next(pnext);
+        }
+        COutputIndexDB::SetBestBlock(batch, chainActive.GetLocator(pindex));
+        if (!poutputindex->WriteBatch(batch))
+            return error("SyncOutputIndex: failed to write the output index");
+    }
+
+    static int64_t nLastLog = 0;
+    if (pnext) {
+        if (GetTime() - nLastLog >= 10) {
+            nLastLog = GetTime();
+            LogPrintf("SyncOutputIndex: output index at height %d of %d (%d%%)\n", pindex->nHeight, chainActive.Height(),
+                (int)((int64_t)pindex->nHeight * 100 / std::max(1, chainActive.Height())));
+        }
+        return true; // more to do
+    }
+
+    pindexOutputIndexBest = chainActive.Tip();
+    LogPrintf("SyncOutputIndex: output index is at height %d %s\n", pindexOutputIndexBest->nHeight, pindexOutputIndexBest->GetBlockHash().ToString());
+    fDone = true;
+    return true;
+}
+
+bool SyncOutputIndex()
+{
+    {
+        LOCK(cs_main);
+        pindexOutputIndexBest = NULL;
+        fOutputIndexDisabled = false;
+    }
+    try {
+        bool fDone = false;
+        if (!SyncOutputIndexStep(OUTPUT_INDEX_STARTUP_BLOCKS, fDone))
+            return false;
+        // A restart only has a few blocks to catch up, done by now. A first start, or a long gap,
+        // continues in ThreadOutputIndex() so that startup does not wait for it.
+        fOutputIndexBuildPending = !fDone;
+        if (!fDone)
+            LogPrintf("SyncOutputIndex: building the rest of the output index in the background; until it is done, outputs are looked up in the block files\n");
+        return true;
+    } catch (const std::exception& e) {
+        LOCK(cs_main);
+        pindexOutputIndexBest = NULL;
+        return error("%s: %s", __func__, e.what());
+    }
+}
+
+void ThreadOutputIndex()
+{
+    if (!fOutputIndexBuildPending)
+        return;
+    const int64_t nStart = GetTime();
+    try {
+        while (true) {
+            if (ShutdownRequested()) {
+                LogPrintf("ThreadOutputIndex: stopped; the output index carries on from where it was at the next start\n");
+                break;
+            }
+            bool fDone = false;
+            if (!SyncOutputIndexStep(1000, fDone)) {
+                LogPrintf("ThreadOutputIndex: building the output index failed; running without it until the next start\n");
+                break;
+            }
+            if (fDone) {
+                LogPrintf("ThreadOutputIndex: output index built in %d seconds\n", GetTime() - nStart);
+                break;
+            }
+            // Let the threads waiting on cs_main in between steps; also an interruption point.
+            MilliSleep(10);
+        }
+    } catch (const boost::thread_interrupted&) {
+        LogPrintf("ThreadOutputIndex: stopped; the output index carries on from where it was at the next start\n");
+        fOutputIndexBuildPending = false;
+        throw;
+    } catch (const std::exception& e) {
+        LogPrintf("ThreadOutputIndex: %s; running without the output index until the next start\n", e.what());
+    }
+    fOutputIndexBuildPending = false;
+}
+
 /** Disconnect chainActive's tip. */
 bool static DisconnectTip(CValidationState& state)
 {
@@ -3639,6 +3892,7 @@ bool static DisconnectTip(CValidationState& state)
             return error("DisconnectTip() : DisconnectBlock %s failed", pindexDelete->GetBlockHash().ToString());
         assert(view.Flush());
     }
+    OutputIndexDisconnectTip(block, pindexDelete);
     LogPrint(BCLog::BENCH, "- Disconnect block: %.2fms\n", (GetTimeMicros() - nStart) * 0.001);
     // Write the chain state to disk, if necessary.
     if (!FlushStateToDisk(state, FLUSH_STATE_ALWAYS))
@@ -3713,6 +3967,7 @@ bool static ConnectTip(CValidationState& state, CBlockIndex* pindexNew, CBlock* 
             nTimeConnectTotal * 0.000001);
         assert(view.Flush());
     }
+    OutputIndexConnectTip(*pblock, pindexNew);
     int64_t nTime4 = GetTimeMicros();
     nTimeFlush += nTime4 - nTime3;
     LogPrint(BCLog::BENCH, "  - Flush: %.2fms [%.2fs]\n", (nTime4 - nTime3) * 0.001, nTimeFlush * 0.000001);
@@ -5497,6 +5752,7 @@ void UnloadBlockIndex()
     LOCK(cs_main);
     setBlockIndexCandidates.clear();
     chainActive.SetTip(NULL);
+    pindexOutputIndexBest = NULL; // points into the block index being unloaded
     pindexBestInvalid = NULL;
     pindexBestHeader = NULL;
     mempool.clear();
