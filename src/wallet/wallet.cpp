@@ -541,6 +541,10 @@ bool CWallet::RescanAfterUnlock(int fromHeight)
                 }
             }
         }
+        // Nothing to resume from (no scanned height, no wallet transaction on the chain):
+        // scan the tip only, as before, rather than the whole chain on every unlock
+        if (pindex == chainActive.Genesis())
+            pindex = chainActive.Tip();
     } else {
         LOCK2(cs_main, cs_wallet);
         //scan from a specific block height
@@ -2099,9 +2103,7 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
             explicit ScanningFlag(bool& fIn) : f(fIn) { f = true; }
             ~ScanningFlag() { f = false; }
         } scanning(fScanningWallet);
-        if (pindexStart == chainActive.Genesis()) {
-            pindex = chainActive.Tip();
-        } else if (height == -1) {
+        if (height == -1) {
             // no need to read and scan block, if block was created before
             // our wallet birthday (as adjusted for block time variability)
             while (pindex && nTimeFirstKey && (pindex->GetBlockTime() < (nTimeFirstKey - 7200))) {
