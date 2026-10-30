@@ -32,15 +32,21 @@ public:
 class CPrcyStake : public CStakeInput
 {
 private:
-    CTransaction txFrom;
+    CTransaction txFrom; // the whole transaction, when set by SetInput() (staking)
+    bool fHaveTxFrom;
+    uint256 hashFrom;
     unsigned int nPosition;
+    CTxOut outFrom; // the staked output alone, when set by SetPrevout() (validation)
+    bool fFromCoinBaseOrStake;
 public:
-    CPrcyStake()
+    CPrcyStake() : fHaveTxFrom(false), nPosition(0), fFromCoinBaseOrStake(false)
     {
         this->pindexFrom = nullptr;
     }
 
     bool SetInput(CTransaction txPrev, unsigned int n);
+    /** For checking a coinstake: the staked output as GetOutput() returns it, not its whole transaction. */
+    bool SetPrevout(const COutPoint& prevout, const CTxOut& out, bool fCoinBaseOrStake);
 
     CBlockIndex* GetIndexFrom() override;
     bool GetTxFrom(CTransaction& tx) override;

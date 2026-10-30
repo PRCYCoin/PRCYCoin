@@ -49,6 +49,7 @@ BITCOIN_TESTS =\
   test/mempool_tests.cpp \
   test/merkle_tests.cpp \
   test/netbase_tests.cpp \
+  test/outputindex_tests.cpp \
   test/pmt_tests.cpp \
   test/prevector_tests.cpp \
   test/raii_event_tests.cpp \
