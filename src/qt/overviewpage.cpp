@@ -173,6 +173,8 @@ void OverviewPage::setBalance(const CAmount& balance, const CAmount& unconfirmed
 
     currentBalance = balance;
     currentUnconfirmedBalance = unconfirmedBalance;
+    // Was re-evaluated on every animation tick; the balance only changes here.
+    showBalanceSync(currentUnconfirmedBalance > 0);
     currentImmatureBalance = immatureBalance;
     currentWatchOnlyBalance = watchOnlyBalance;
     currentWatchUnconfBalance = watchUnconfBalance;
@@ -324,6 +326,7 @@ void OverviewPage::showBalanceSync(bool fShow){
         ui->labelPendingText->setVisible(true);
         ui->labelUnconfirmed->setVisible(true);
         ui->labelBalanceText->setVisible(true);
+        const bool fChanged = isSyncingBalance != fShow;
         isSyncingBalance = fShow;
         if (isSyncingBalance){
             QString tooltip = "The displayed information may be out of date. Your wallet automatically synchronizes with the PRCY network after a connection is established, but this process has not completed yet.";
@@ -333,6 +336,8 @@ void OverviewPage::showBalanceSync(bool fShow){
             ui->labelUnconfirmed->setToolTip("Your pending balance");
             ui->labelBalance->setToolTip("Your current balance");
         }
+        if (fChanged)
+            updateSyncAnimation();
 }
 
 void OverviewPage::showBlockSync(bool fShow)
@@ -340,6 +345,7 @@ void OverviewPage::showBlockSync(bool fShow)
     ui->labelBlockOf->setVisible(fShow);
     ui->labelBlocksTotal->setVisible(fShow);
 
+    const bool fChanged = isSyncingBlocks != fShow;
     isSyncingBlocks = fShow;
 
     int count = clientModel->getNumBlocks();
@@ -354,6 +360,8 @@ void OverviewPage::showBlockSync(bool fShow)
         ui->labelBlockStatus->setToolTip("Your wallet is fully synchronized with the PRCY network.");
         ui->labelBlockCurrent->setAlignment((Qt::AlignHCenter|Qt::AlignVCenter));
     }
+    if (fChanged)
+        updateSyncAnimation();
 }
 
 void OverviewPage::showBlockCurrentHeight(int count)
@@ -389,28 +397,44 @@ void OverviewPage::initSyncCircle(float ratioToParent)
     balanceSyncCircle->setStyleSheet("image:url(':/images/syncp')");//"background-image: ./image.png");
     balanceSyncCircle->setGeometry(getCircleGeometry(ui->widgetSyncBalance, ratioToParent));
     balanceSyncCircle->show();
+
+    // The balance circle used to be switched off by the first tick, before any balance
+    // was known; keep that.
+    showBalanceSync(currentUnconfirmedBalance > 0);
 }
 
+// Only moves the circles. Restyling happens in updateSyncAnimation(), when a sync state
+// changes: setStyleSheet() re-polishes the widget, and running it on every tick kept a
+// CPU core busy even when the wallet was fully synced.
 void OverviewPage::onAnimTick()
 {
-    if (isSyncingBlocks){
+    if (isSyncingBlocks)
         moveSyncCircle(blockSyncCircle, blockAnimSyncCircle, 3, 120);
-        blockSyncCircle->setStyleSheet("image:url(':/images/syncp')");
-        blockAnimSyncCircle->setVisible(true);
-    } else {
-        blockSyncCircle->setStyleSheet("image:url(':/images/syncb')");
-        blockAnimSyncCircle->setVisible(false);
-        ui->lblHelp->setText(ui->lblHelp->text().remove("It is advised not to send or receive coins until your current sync is complete."));
-    }
-    if (isSyncingBalance){
+    if (isSyncingBalance)
         moveSyncCircle(balanceSyncCircle, balanceAnimSyncCircle, 3, -100, 130);
-        balanceSyncCircle->setStyleSheet("image:url(':/images/syncp')");
-        balanceAnimSyncCircle->setVisible(true);
+}
+
+void OverviewPage::updateSyncAnimation()
+{
+    blockSyncCircle->setStyleSheet(isSyncingBlocks ? "image:url(':/images/syncp')" : "image:url(':/images/syncb')");
+    blockAnimSyncCircle->setVisible(isSyncingBlocks);
+    if (!isSyncingBlocks)
+        ui->lblHelp->setText(ui->lblHelp->text().remove("It is advised not to send or receive coins until your current sync is complete."));
+
+    balanceSyncCircle->setStyleSheet(isSyncingBalance ? "image:url(':/images/syncp')" : "image:url(':/images/syncb')");
+    balanceAnimSyncCircle->setVisible(isSyncingBalance);
+
+    // Tick only while something is animating. Restart the clock with the timer: the angle
+    // is computed in float from the elapsed milliseconds, which gets coarse after days of
+    // uptime.
+    if (isSyncingBlocks || isSyncingBalance) {
+        if (!animTicker->isActive()) {
+            animClock->restart();
+            animTicker->start();
+        }
     } else {
-        balanceSyncCircle->setStyleSheet("image:url(':/images/syncb')");
-        balanceAnimSyncCircle->setVisible(false);
+        animTicker->stop();
     }
-    showBalanceSync(currentUnconfirmedBalance>0);
 }
 
 void OverviewPage::moveSyncCircle(QWidget* anchor, QWidget* animated, int deltaRadius, float degreesPerSecond, float angleOffset) //deltaRad in px
