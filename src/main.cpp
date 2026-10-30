@@ -4575,16 +4575,18 @@ bool AcceptBlockHeader(const CBlock& block, CValidationState& state, CBlockIndex
     uint256 hash = block.GetHash();
     BlockMap::iterator miSelf = mapBlockIndex.find(hash);
     CBlockIndex* pindex = NULL;
+    // A NULL entry is left by a mapBlockIndex[] lookup made before the block arrived and holds nothing:
+    // drop it and treat the block as new
+    if (miSelf != mapBlockIndex.end() && miSelf->second == NULL) {
+        mapBlockIndex.erase(miSelf);
+        miSelf = mapBlockIndex.end();
+    }
     // TODO : ENABLE BLOCK CACHE IN SPECIFIC CASES
     if (miSelf != mapBlockIndex.end()) {
         // Block header is already known.
         pindex = miSelf->second;
         if (ppindex)
             *ppindex = pindex;
-        if (!pindex) {
-            mapBlockIndex.erase(hash);
-            return state.Invalid(error("%s : block is not found", __func__), 0, "not-found");
-        }
         if (pindex->nStatus & BLOCK_FAILED_MASK)
             return state.Invalid(error("%s : block is marked invalid", __func__), 0, "duplicate");
         return true;
@@ -4597,7 +4599,7 @@ bool AcceptBlockHeader(const CBlock& block, CValidationState& state, CBlockIndex
     CBlockIndex* pindexPrev = NULL;
     if (hash != Params().HashGenesisBlock()) {
         BlockMap::iterator mi = mapBlockIndex.find(block.hashPrevBlock);
-        if (mi == mapBlockIndex.end())
+        if (mi == mapBlockIndex.end() || mi->second == NULL)
             return state.DoS(0, error("%s : prev block %s not found", __func__, block.hashPrevBlock.ToString().c_str()),
                 0, "bad-prevblk");
         pindexPrev = (*mi).second;
@@ -4621,9 +4623,6 @@ bool AcceptBlockHeader(const CBlock& block, CValidationState& state, CBlockIndex
         }
     }
 
-    if (!pindexPrev)
-        return state.DoS(0, error("%s : prev block %s not found", __func__, block.hashPrevBlock.ToString().c_str()),
-            0, "bad-prevblk");
     if (!ContextualCheckBlockHeader(block, state, pindexPrev))
         return false;
 
@@ -5511,8 +5510,9 @@ bool LoadExternalBlockFile(FILE* fileIn, CDiskBlockPos* dbp)
 
                 // detect out of order blocks, and store them for later
                 uint256 hash = block.GetHash();
+                BlockMap::iterator miPrev = mapBlockIndex.find(block.hashPrevBlock);
                 if (hash != Params().HashGenesisBlock() &&
-                    mapBlockIndex.find(block.hashPrevBlock) == mapBlockIndex.end()) {
+                    (miPrev == mapBlockIndex.end() || miPrev->second == NULL)) {
                     LogPrint(BCLog::REINDEX, "%s: Out of order block %s, parent %s not known\n", __func__,
                             hash.GetHex(), block.hashPrevBlock.GetHex());
                     if (dbp)
