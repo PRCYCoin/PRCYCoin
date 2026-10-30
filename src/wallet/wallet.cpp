@@ -343,6 +343,14 @@ void CWallet::GenerateNewHDChain(std::string* phrase)
     if (!SetHDChain(newHdChain, false))
         throw std::runtime_error(std::string(__func__) + ": SetHDChain failed");
 
+    // A mnemonic we were given is a restore: its keys can be older than this wallet, so
+    // their creation time is unknown, as for an imported key, and rescans must not skip
+    // ahead to the restore date
+    if (!strMnemonic.empty()) {
+        fHDChainRestored = true;
+        nTimeFirstKey = 1; // 0 would be considered 'no value'
+    }
+
     if (phrase) {
         CreatePrivacyAccount(true);
     }
@@ -6176,6 +6184,7 @@ void CWallet::SetNull()
     nNextResend = 0;
     nLastResend = 0;
     nTimeFirstKey = 0;
+    fHDChainRestored = false;
     fWalletUnlockStakingOnly = false;
 
     // Stake Settings
@@ -6948,8 +6957,8 @@ void CWallet::DeriveNewChildKey(uint32_t nAccountIndex, CKey& secretRet)
     CPubKey pubkey = secretRet.GetPubKey();
     assert(secretRet.VerifyPubKey(pubkey));
 
-    // store metadata
-    int64_t nCreationTime = GetTime();
+    // store metadata; 1 marks a key from a restored seed, whose real age is unknown
+    int64_t nCreationTime = fHDChainRestored ? 1 : GetTime();
     mapKeyMetadata[pubkey.GetID()] = CKeyMetadata(nCreationTime);
 
     if (!AddHDPubKey(childKey.Neuter(), false, nAccountIndex))

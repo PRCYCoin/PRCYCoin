@@ -361,6 +361,9 @@ public:
     std::map<CKeyID, CHDPubKey> mapHdPubKeys; //<! memory map of HD extended pubkeys
 
     int64_t nTimeFirstKey;
+    //! Set when this session restored the HD chain from a mnemonic; keys derived from it
+    //! then get creation time 1 (unknown), since the seed can be older than the wallet.
+    bool fHDChainRestored;
 
     CombineMode combineMode = OFF;
     int64_t DecoyConfirmationMinimum = 15;
