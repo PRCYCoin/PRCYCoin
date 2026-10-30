@@ -58,6 +58,7 @@
 #include <QTextEdit>
 #include <QToolBar>
 #include <QVBoxLayout>
+#include <QVersionNumber>
 #include <QPushButton>
 #include <QDesktopServices>
 #include <QJsonDocument>
@@ -999,18 +1000,24 @@ void BitcoinGUI::checkForUpdatesFinished(bool isClicked)
 {
     if (!gitReply->failed && gitReply->complete) {
         try {
-            QString currentVersion = QString("%1.%2.%3.%4").arg(CLIENT_VERSION_MAJOR).arg(CLIENT_VERSION_MINOR).arg(CLIENT_VERSION_REVISION).arg(CLIENT_VERSION_BUILD);
-            QString currentVersionStripped = currentVersion.replace(".", "");
+            // Compare the versions number by number. Comparing them as strings with the
+            // dots removed put 2.0.0.6 ("2006") above 2.0.0.10 ("20010").
+            const QVersionNumber currentVersion = QVersionNumber({CLIENT_VERSION_MAJOR, CLIENT_VERSION_MINOR, CLIENT_VERSION_REVISION, CLIENT_VERSION_BUILD}).normalized();
 
             QJsonDocument response = QJsonDocument::fromJson(gitReply->response.c_str());
             const QJsonObject jsonObject = response.object();
             QString gitStrVersion = jsonObject["tag_name"].toString();
-            QString gitStrVersionStripped = gitStrVersion.replace(".", "");
+            if (gitStrVersion.startsWith('v', Qt::CaseInsensitive))
+                gitStrVersion.remove(0, 1);
+            const QVersionNumber gitVersion = QVersionNumber::fromString(gitStrVersion).normalized();
 
             QString gitStrName = jsonObject["name"].toString();
             bool isMandatory = gitStrName.contains("Mandatory", Qt::CaseInsensitive);
 
-            if (gitStrVersionStripped > currentVersionStripped) {
+            if (gitVersion.isNull()) {
+                LogPrintf("Check For Updates: could not read a version from release tag \"%s\"\n", jsonObject["tag_name"].toString().toStdString());
+            }
+            if (!gitVersion.isNull() && QVersionNumber::compare(gitVersion, currentVersion) > 0) {
                 LogPrintf("Check For Updates: Update Available!\n");
 
                 QString updateMessage = tr("Wallet update available.\n\nWould you like to go to the GitHub Releases page to download v") + gitStrVersion + "?";
