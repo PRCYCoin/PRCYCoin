@@ -674,6 +674,12 @@ void ThreadImport(std::vector<fs::path> vImportFiles)
         LogPrintf("Reindexing finished\n");
         // To avoid ending up in a situation without genesis block, re-try initializing (no-op if reindexing worked):
         InitBlockIndex();
+        // If that wrote a new genesis block, connect it: init is waiting for one
+        CValidationState state;
+        if (!ActivateBestChain(state)) {
+            LogPrintf("Failed to connect best block\n");
+            StartShutdown();
+        }
     }
 
     // hardcoded $DATADIR/bootstrap.dat
@@ -1809,10 +1815,16 @@ bool AppInit2(bool isDaemon)
     LogPrintf("Waiting for genesis block to be imported...\n");
     {
         std::unique_lock<std::mutex> lockG(cs_GenesisWait);
-        while (!fHaveGenesis) {
-            condvar_GenesisWait.wait(lockG);
+        // Wake up regularly: if the genesis block never arrives, a shutdown request is the only way out,
+        // and RPC (including "stop") is not available until init is done
+        while (!fHaveGenesis && !ShutdownRequested()) {
+            condvar_GenesisWait.wait_for(lockG, std::chrono::milliseconds(500));
         }
         uiInterface.NotifyBlockTip.disconnect(BlockNotifyGenesisWait);
+    }
+    if (ShutdownRequested()) {
+        LogPrintf("Shutdown requested. Exiting.\n");
+        return false;
     }
 
     // ********************************************************* Step 10: setup layer 2 data
