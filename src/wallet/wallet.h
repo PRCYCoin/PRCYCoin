@@ -684,6 +684,8 @@ private:
     mutable bool fMasterViewKeyCached = false;
     bool isMatchMyKeyImage(const CKeyImage& ki, const COutPoint& out);
     void ScanWalletKeyImages();
+    //! True while ScanForWalletTransactions() runs. Guarded by cs_wallet.
+    bool fScanningWallet = false;
 };
 
 
