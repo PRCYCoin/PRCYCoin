@@ -81,6 +81,7 @@ int nScriptCheckThreads = 0;
 std::atomic<bool> fImporting{false};
 std::atomic<bool> fReindex{false};
 bool fTxIndex = true;
+bool fCheckOutputIndex = false;
 bool fIsBareMultisigStd = true;
 bool fCheckBlockIndex = false;
 bool fVerifyingBlocks = false;
@@ -230,12 +231,9 @@ bool GetValueIn(const CCoinsViewCache& view, const CTransaction& tx, CAmount& nR
         for (unsigned int i = 0; i < tx.vin.size(); i++) {
             CAmount nValueIn = 0;
             uint256 hashBlock;
-            CTransaction txPrev;
-            if (!GetTransaction(tx.vin[i].prevout.hash, txPrev, hashBlock, true))
+            CTxOut out;
+            if (!GetOutput(tx.vin[i].prevout, out, hashBlock))
                 return error("%s : missing prevout for coinstake %s", __func__, tx.GetHash().GetHex());
-            if (tx.vin[i].prevout.n >= txPrev.vout.size())
-                return error("%s : prevout index out of range for coinstake %s", __func__, tx.GetHash().GetHex());
-            const CTxOut& out = txPrev.vout[tx.vin[i].prevout.n];
             if (out.nValue > 0) {
                 nResult += out.nValue;
             } else {
@@ -465,9 +463,11 @@ bool VerifyRingSignatureWithTxFee(const CTransaction& tx, CBlockIndex* pindex)
             decoysForIn.push_back(tx.vin[i].decoys[j]);
         }
         for (size_t j = 0; j < tx.vin[0].decoys.size() + 1; j++) {
-            CTransaction txPrev;
+            CTxOut prevOut;
             uint256 hashBlock;
-            if (!GetTransaction(decoysForIn[j].hash, txPrev, hashBlock)) {
+            bool fTxFound = false;
+            const bool fHaveOutput = GetOutput(decoysForIn[j], prevOut, hashBlock, nullptr, nullptr, &fTxFound, false);
+            if (!fTxFound) {
                 LogPrintf("Failed to find transaction %s\n", decoysForIn[j].hash.GetHex());
                 return false;
             }
@@ -488,11 +488,10 @@ bool VerifyRingSignatureWithTxFee(const CTransaction& tx, CBlockIndex* pindex)
                 }
             }
 
-            if (decoysForIn[j].n >= txPrev.vout.size()) {
+            if (!fHaveOutput) {
                 LogPrintf("%s: decoy output index out of range in tx %s\n", __func__, decoysForIn[j].hash.GetHex());
                 return false;
             }
-            const CTxOut& prevOut = txPrev.vout[decoysForIn[j].n];
             if (prevOut.commitment.size() < 33) {
                 LogPrintf("%s: decoy commitment too short in tx %s\n", __func__, decoysForIn[j].hash.GetHex());
                 return false;
@@ -1381,15 +1380,14 @@ bool AreInputsStandard(const CTransaction& tx, const CCoinsViewCache& mapInputs)
         return true; // coinbase has no inputs
 
     for (unsigned int i = 0; i < tx.vin.size(); i++) {
-        CTransaction txPrev;
+        CTxOut prev;
         uint256 hashBlockPrev;
-        if (!GetTransaction(tx.vin[i].prevout.hash, txPrev, hashBlockPrev)) {
-            continue; // previous transaction not in main chain
+        bool fTxFound = false;
+        if (!GetOutput(tx.vin[i].prevout, prev, hashBlockPrev, nullptr, nullptr, &fTxFound, false)) {
+            if (!fTxFound)
+                continue; // previous transaction not in main chain
+            return false; // it has no such output
         }
-        if (tx.vin[i].prevout.n >= txPrev.vout.size())
-            return false;
-
-        const CTxOut& prev = txPrev.vout[tx.vin[i].prevout.n];
 
         std::vector<std::vector<unsigned char> > vSolutions;
         txnouttype whichType;
@@ -1478,19 +1476,16 @@ int GetIXConfirmations(uint256 nTXHash)
 bool VerifyShnorrKeyImageTxIn(const CTxIn& txin, uint256 ctsHash)
 {
     COutPoint prevout = txin.prevout;
-    CTransaction prev;
+    CTxOut prev;
     uint256 bh;
-    if (!GetTransaction(prevout.hash, prev, bh, true)) {
-        return false;
-    }
-    if (prevout.n >= prev.vout.size()) {
-        LogPrintf("%s: prevout index out of range\n", __func__);
+    if (!GetOutput(prevout, prev, bh)) {
+        LogPrintf("%s: prevout not found\n", __func__);
         return false;
     }
     uint256 s(txin.s);
     unsigned char S[33];
     CPubKey P;
-    if (!ExtractPubKey(prev.vout[prevout.n].scriptPubKey, P)) {
+    if (!ExtractPubKey(prev.scriptPubKey, P)) {
         LogPrintf("%s: prevout is not pay-to-pubkey\n", __func__);
         return false;
     }
@@ -1613,14 +1608,18 @@ bool CheckHaveInputs(const CCoinsViewCache& view, const CTransaction& tx)
 
             alldecoys.push_back(tx.vin[i].prevout);
             for (size_t j = 0; j < alldecoys.size(); j++) {
-                CTransaction prev;
+                CTxOut prev;
                 uint256 bh;
-                if (!GetTransaction(alldecoys[j].hash, prev, bh, true)) {
+                bool fCoinBase = false, fCoinStake = false, fTxFound = false;
+                // Only the transaction has to exist here, as before; the output itself is read
+                // by the ring signature check.
+                GetOutput(alldecoys[j], prev, bh, &fCoinBase, &fCoinStake, &fTxFound);
+                if (!fTxFound) {
                     return false;
                 }
 
                 if (mapBlockIndex.count(bh) < 1) return false;
-                if (prev.IsCoinStake() || prev.IsCoinAudit() || prev.IsCoinBase()) {
+                if (fCoinStake || fCoinBase) { // IsCoinAudit() is the same test as IsCoinBase()
                     if (nSpendHeight - mapBlockIndex[bh]->nHeight < Params().COINBASE_MATURITY()) return false;
                 }
 
@@ -1751,9 +1750,11 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState& state, const CTransa
 
                 alldecoys.push_back(tx.vin[i].prevout);
                 for (size_t j = 0; j < alldecoys.size(); j++) {
-                    CTransaction prev;
+                    CTxOut prev;
                     uint256 bh;
-                    if (!GetTransaction(alldecoys[j].hash, prev, bh, true)) {
+                    bool fTxFound = false;
+                    GetOutput(alldecoys[j], prev, bh, nullptr, nullptr, &fTxFound); // only the transaction has to exist, as before
+                    if (!fTxFound) {
                         return false;
                     }
                     if (mapBlockIndex.count(bh) < 1) return false;
@@ -1973,9 +1974,11 @@ bool AcceptableInputs(CTxMemPool& pool, CValidationState& state, const CTransact
 
                 alldecoys.push_back(tx.vin[i].prevout);
                 for (size_t j = 0; j < alldecoys.size(); j++) {
-                    CTransaction prev;
+                    CTxOut prev;
                     uint256 bh;
-                    if (!GetTransaction(alldecoys[j].hash, prev, bh, true)) {
+                    bool fTxFound = false;
+                    GetOutput(alldecoys[j], prev, bh, nullptr, nullptr, &fTxFound); // only the transaction has to exist, as before
+                    if (!fTxFound) {
                         return false;
                     }
                     if (mapBlockIndex.count(bh) < 1) return false;
@@ -2869,20 +2872,22 @@ bool CheckInputs(const CTransaction& tx, CValidationState& state, const CCoinsVi
         if (tx.IsCoinStake()) {
             for (unsigned int i = 0; i < tx.vin.size(); i++) {
                 const COutPoint& prevout = tx.vin[i].prevout;
-                CTransaction prev;
+                CTxOut prev;
                 uint256 bh;
-                if (!GetTransaction(prevout.hash, prev, bh, true)) {
+                bool fCoinBase = false, fCoinStake = false, fTxFound = false;
+                GetOutput(prevout, prev, bh, &fCoinBase, &fCoinStake, &fTxFound); // the transaction has to exist, as before
+                if (!fTxFound) {
                     return state.Invalid(
                         error("CheckInputs() : Inputs not available"),
                         REJECT_INVALID, "bad-txns");
                 }
 
                 // If prev is coinbase, check that it's matured
-                if (prev.IsCoinBase() || prev.IsCoinStake()) {
+                if (fCoinBase || fCoinStake) {
                     if (nSpendHeight - mapBlockIndex[bh]->nHeight < Params().COINBASE_MATURITY())
                         return state.Invalid(
                             error("CheckInputs() : tried to spend coinbase at depth %d, coinstake=%d",
-                                nSpendHeight - mapBlockIndex[bh]->nHeight, prev.IsCoinStake()),
+                                nSpendHeight - mapBlockIndex[bh]->nHeight, fCoinStake),
                             REJECT_INVALID, "bad-txns-premature-spend-of-coinbase");
                 }
             }
@@ -2899,17 +2904,21 @@ bool CheckInputs(const CTransaction& tx, CValidationState& state, const CCoinsVi
         if (fScriptChecks && tx.IsCoinStake()) {
             for (unsigned int i = 0; i < tx.vin.size(); i++) {
                 const COutPoint& prevout = tx.vin[i].prevout;
-                CTransaction prev;
+                CTxOut prev;
                 uint256 bh;
-                if (!GetTransaction(prevout.hash, prev, bh, true)) {
+                bool fCoinBase = false, fCoinStake = false, fTxFound = false;
+                const bool fHaveOutput = GetOutput(prevout, prev, bh, &fCoinBase, &fCoinStake, &fTxFound);
+                if (!fTxFound) {
                     return state.Invalid(
                         error("CheckInputs() : Inputs not available"),
                         REJECT_INVALID, "bad-txns");
                 }
-                CCoins coins(prev, mapBlockIndex[bh]->nHeight);
+                // The script being spent. It used to come from CCoins(prevTx, height), which empties
+                // unspendable outputs; do the same.
+                const CScript scriptPrev = (fHaveOutput && !prev.scriptPubKey.IsUnspendable()) ? prev.scriptPubKey : CScript();
 
                 // Verify signature
-                CScriptCheck check(coins, tx, i, flags, cacheStore);
+                CScriptCheck check(scriptPrev, tx, i, flags, cacheStore);
                 if (pvChecks) {
                     pvChecks->push_back(CScriptCheck());
                     check.swap(pvChecks->back());
@@ -2921,7 +2930,7 @@ bool CheckInputs(const CTransaction& tx, CValidationState& state, const CCoinsVi
                         // arguments; if so, don't trigger DoS protection to
                         // avoid splitting the network between upgraded and
                         // non-upgraded nodes.
-                        CScriptCheck check(coins, tx, i,
+                        CScriptCheck check(scriptPrev, tx, i,
                             flags & ~STANDARD_NOT_MANDATORY_VERIFY_FLAGS, cacheStore);
                         if (check())
                             return state.Invalid(false, REJECT_NONSTANDARD,
@@ -3339,9 +3348,11 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
 
                 alldecoys.push_back(tx.vin[i].prevout);
                 for (size_t j = 0; j < alldecoys.size(); j++) {
-                    CTransaction prev;
+                    CTxOut prev;
                     uint256 bh;
-                    if (!GetTransaction(alldecoys[j].hash, prev, bh, true)) {
+                    bool fTxFound = false;
+                    GetOutput(alldecoys[j], prev, bh, nullptr, nullptr, &fTxFound); // only the transaction has to exist, as before
+                    if (!fTxFound) {
                         return false;
                     }
                     if (mapBlockIndex.count(bh) < 1) return false;
@@ -3695,6 +3706,161 @@ static void OutputIndexDisconnectTip(const CBlock& block, CBlockIndex* pindexDel
         return;
     }
     pindexOutputIndexBest = pindexDelete->pprev;
+}
+
+/** Output n of tx, in the form GetOutput() returns it. */
+static bool OutputFromTx(const CTransaction& tx, uint32_t n, CTxOut& txout, bool* pfCoinBase, bool* pfCoinStake, bool* pfTxFound)
+{
+    if (pfTxFound)
+        *pfTxFound = true;
+    if (pfCoinBase)
+        *pfCoinBase = tx.IsCoinBase();
+    if (pfCoinStake)
+        *pfCoinStake = tx.IsCoinStake();
+    if (n >= tx.vout.size())
+        return false;
+    txout = COutputIndexEntry(tx.vout[n]).ToTxOut();
+    return true;
+}
+
+static bool SameOutput(const COutputIndexEntry& a, const COutputIndexEntry& b)
+{
+    return a.nValue == b.nValue && a.scriptPubKey == b.scriptPubKey && a.commitment == b.commitment &&
+           a.amount == b.amount && a.mask == b.mask;
+}
+
+/** -checkoutputindex: lookups compared so far, for the periodic log line. */
+static uint64_t nOutputIndexChecks = 0;
+/** -checkoutputindex: a difference was found and the node is stopping. */
+static bool fOutputIndexCheckFailed = false;
+
+static void OutputIndexCheckFailed(const COutPoint& outpoint, const std::string& strProblem)
+{
+    const std::string strMessage = strprintf("Output index check failed for %s: %s", outpoint.ToString(), strProblem);
+    if (fOutputIndexCheckFailed) {
+        LogPrintf("%s\n", strMessage);
+        return;
+    }
+    fOutputIndexCheckFailed = true;
+    AbortNode(strMessage, _("Error: the output index gave a different answer from the block files. "
+                            "Please send debug.log to the developers."));
+}
+
+static void CountOutputIndexCheck()
+{
+    ++nOutputIndexChecks;
+    if (nOutputIndexChecks == 1000 || nOutputIndexChecks == 10000 || nOutputIndexChecks % 100000 == 0)
+        LogPrintf("-checkoutputindex: %u lookups checked against the block files, no differences\n", nOutputIndexChecks);
+}
+
+/**
+ * -checkoutputindex, for an output the index holds: GetTransaction() must find the same
+ * transaction in the same block, with output n present or absent alike and the same fields.
+ */
+static bool CheckIndexedOutput(const COutPoint& outpoint, const COutputIndexTx& rec, const uint256& hashBlock)
+{
+    CTransaction tx;
+    uint256 hashBlockTx;
+    if (!GetTransaction(outpoint.hash, tx, hashBlockTx, true)) {
+        OutputIndexCheckFailed(outpoint, "the index holds the transaction but the block files do not");
+        return false;
+    }
+    if (hashBlockTx != hashBlock) {
+        OutputIndexCheckFailed(outpoint, strprintf("index says block %s, block files say %s", hashBlock.ToString(), hashBlockTx.ToString()));
+        return false;
+    }
+    if (tx.vout.size() != rec.vout.size() || tx.IsCoinBase() != rec.fCoinBase || tx.IsCoinStake() != rec.fCoinStake) {
+        OutputIndexCheckFailed(outpoint, strprintf("index has %u outputs, coinbase %d, coinstake %d; block files have %u, %d, %d",
+            rec.vout.size(), rec.fCoinBase, rec.fCoinStake, tx.vout.size(), tx.IsCoinBase(), tx.IsCoinStake()));
+        return false;
+    }
+    if (outpoint.n < tx.vout.size() && !SameOutput(COutputIndexEntry(tx.vout[outpoint.n]), rec.vout[outpoint.n])) {
+        OutputIndexCheckFailed(outpoint, "the output's amount, script, commitment or encrypted amount differ");
+        return false;
+    }
+    CountOutputIndexCheck();
+    return true;
+}
+
+/**
+ * The old way: the transaction index and the block files (GetTransaction()). fIndexMissed: the
+ * index was asked and had no usable record, so finding the transaction in a block the index
+ * covers means the index is wrong.
+ */
+static bool GetOutputFromBlockFiles(const COutPoint& outpoint, CTxOut& txout, uint256& hashBlock, bool* pfCoinBase, bool* pfCoinStake, bool* pfTxFound, bool fAllowSlow, bool fIndexMissed)
+{
+    CTransaction tx;
+    uint256 hashBlockTx = hashBlock;
+    if (!GetTransaction(outpoint.hash, tx, hashBlockTx, fAllowSlow))
+        return false;
+    // The index holds every transaction in the blocks it covers, bar the genesis coinbase.
+    if (fIndexMissed && poutputindex && pindexOutputIndexBest) {
+        BlockMap::iterator mi = mapBlockIndex.find(hashBlockTx);
+        if (mi != mapBlockIndex.end() && mi->second && mi->second->pprev &&
+            pindexOutputIndexBest->GetAncestor(mi->second->nHeight) == mi->second) {
+            LogPrintf("%s: the output index has no record of %s, in block %d %s\n", __func__,
+                outpoint.hash.ToString(), mi->second->nHeight, hashBlockTx.ToString());
+            if (fCheckOutputIndex)
+                OutputIndexCheckFailed(outpoint, "missing from the index but in a block the index covers");
+        } else if (fCheckOutputIndex) {
+            CountOutputIndexCheck();
+        }
+    }
+    hashBlock = hashBlockTx;
+    return OutputFromTx(tx, outpoint.n, txout, pfCoinBase, pfCoinStake, pfTxFound);
+}
+
+bool GetOutput(const COutPoint& outpoint, CTxOut& txout, uint256& hashBlock, bool* pfCoinBase, bool* pfCoinStake, bool* pfTxFound, bool fAllowSlow)
+{
+    LOCK(cs_main);
+    if (pfTxFound)
+        *pfTxFound = false;
+
+    // The mempool first, as GetTransaction() does; it leaves hashBlock as it was.
+    CTransaction tx;
+    if (mempool.lookup(outpoint.hash, tx))
+        return OutputFromTx(tx, outpoint.n, txout, pfCoinBase, pfCoinStake, pfTxFound);
+
+    // Without the transaction index GetTransaction() answers differently (from the mempool, or
+    // for fAllowSlow from the coin database), so the index is only used alongside it.
+    COutputIndexTx rec;
+    bool fHaveRecord = false;
+    if (fTxIndex && poutputindex && pindexOutputIndexBest) {
+        try {
+            fHaveRecord = poutputindex->ReadTx(outpoint.hash, rec);
+        } catch (const std::exception& e) {
+            DisableOutputIndex(strprintf("failed to read %s (%s)", outpoint.hash.ToString(), e.what()));
+            if (fCheckOutputIndex)
+                OutputIndexCheckFailed(outpoint, "the output index could not be read");
+        }
+    }
+    if (fHaveRecord) {
+        CBlockIndex* pindex = pindexOutputIndexBest->GetAncestor(rec.nHeight);
+        if (!pindex || pindex->GetBlockHash() != rec.hashBlock) {
+            // A record from a block this node no longer has (see COutputIndexTx::hashBlock): not
+            // an answer; look in the block files instead.
+            LogPrintf("%s: ignoring an output index record for %s from block %s, which is not on the chain\n", __func__,
+                outpoint.hash.ToString(), rec.hashBlock.ToString());
+        } else {
+            const uint256 hashIndexed = rec.hashBlock;
+            if (fCheckOutputIndex && !CheckIndexedOutput(outpoint, rec, hashIndexed))
+                return GetOutputFromBlockFiles(outpoint, txout, hashBlock, pfCoinBase, pfCoinStake, pfTxFound, fAllowSlow, false); // the node is stopping; answer as before meanwhile
+            if (pfTxFound)
+                *pfTxFound = true;
+            hashBlock = hashIndexed;
+            if (pfCoinBase)
+                *pfCoinBase = rec.fCoinBase;
+            if (pfCoinStake)
+                *pfCoinStake = rec.fCoinStake;
+            if (outpoint.n >= rec.vout.size())
+                return false;
+            txout = rec.vout[outpoint.n].ToTxOut();
+            return true;
+        }
+    }
+
+    // Still in use here means the index was asked and had no usable record.
+    return GetOutputFromBlockFiles(outpoint, txout, hashBlock, pfCoinBase, pfCoinStake, pfTxFound, fAllowSlow, fTxIndex && poutputindex && pindexOutputIndexBest);
 }
 
 /** Throw the output index away and start an empty one. */
@@ -4072,9 +4238,11 @@ void RemoveInvalidTransactionsFromMempool()
             std::vector<COutPoint> decoys = tx.vin[i].decoys;
             decoys.push_back(tx.vin[i].prevout);
             for (size_t j = 0; j < decoys.size(); j++) {
-                CTransaction txPrev;
+                CTxOut prevOut;
                 uint256 hashBlock;
-                if (!GetTransaction(decoys[j].hash, txPrev, hashBlock)) {
+                bool fTxFound = false;
+                GetOutput(decoys[j], prevOut, hashBlock, nullptr, nullptr, &fTxFound, false); // only the transaction has to exist, as before
+                if (!fTxFound) {
                     tobeRemoveds.push_back(tx);
                     needsBreak = true;
                     break;

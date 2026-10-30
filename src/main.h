@@ -148,6 +148,8 @@ extern std::atomic<bool> fImporting;
 extern std::atomic<bool> fReindex;
 extern int nScriptCheckThreads;
 extern bool fTxIndex;
+/** -checkoutputindex: check every output-index answer against the block files (testing) */
+extern bool fCheckOutputIndex;
 extern bool fIsBareMultisigStd;
 extern bool fCheckBlockIndex;
 extern size_t nCoinCacheUsage;
@@ -240,6 +242,25 @@ bool IsInitialBlockDownload();
 std::string GetWarnings(std::string strFor);
 /** Retrieve a transaction (from memory pool, or from disk, if possible) */
 bool GetTransaction(const uint256& hash, CTransaction& tx, uint256& hashBlock, bool fAllowSlow = false, CBlockIndex* blockIndex = nullptr);
+/**
+ * Look up one transaction output for validation: what GetTransaction(outpoint.hash, ..., true)
+ * followed by tx.vout[outpoint.n] used to give, read from the output index instead of the block
+ * files where it can be. The mempool is still asked first and leaves hashBlock untouched, as
+ * GetTransaction() does; a transaction the index does not hold is still looked for through the
+ * transaction index. Returns false if the transaction is not found or has no output n.
+ *
+ * txout holds only the fields validation reads from a spent output: nValue, scriptPubKey,
+ * commitment and maskValue.amount/mask (see COutputIndexEntry). pfCoinBase and pfCoinStake, if
+ * given, receive IsCoinBase()/IsCoinStake() of the transaction that created it.
+ *
+ * pfTxFound, if given, says whether the transaction itself was found. When it was but has no
+ * output n, hashBlock and the flags are still filled in: callers that only ever required the
+ * transaction to exist (the decoy checks) keep doing exactly that.
+ *
+ * fAllowSlow is passed on to GetTransaction() for the fallback; it only matters without the
+ * transaction index, and the index is not used then.
+ */
+bool GetOutput(const COutPoint& outpoint, CTxOut& txout, uint256& hashBlock, bool* pfCoinBase = nullptr, bool* pfCoinStake = nullptr, bool* pfTxFound = nullptr, bool fAllowSlow = true);
 /** Find the best known block, and make it the tip of the block chain */
 
 bool CheckHaveInputs(const CCoinsViewCache& view, const CTransaction& tx);
@@ -362,6 +383,8 @@ private:
 public:
     CScriptCheck() : ptxTo(0), nIn(0), nFlags(0), cacheStore(false), error(SCRIPT_ERR_UNKNOWN_ERROR) {}
     CScriptCheck(const CCoins& txFromIn, const CTransaction& txToIn, unsigned int nInIn, unsigned int nFlagsIn, bool cacheIn) : scriptPubKey(txFromIn.vout[txToIn.vin[nInIn].prevout.n].scriptPubKey),
+                                                                                                                                ptxTo(&txToIn), nIn(nInIn), nFlags(nFlagsIn), cacheStore(cacheIn), error(SCRIPT_ERR_UNKNOWN_ERROR) {}
+    CScriptCheck(const CScript& scriptPubKeyIn, const CTransaction& txToIn, unsigned int nInIn, unsigned int nFlagsIn, bool cacheIn) : scriptPubKey(scriptPubKeyIn),
                                                                                                                                 ptxTo(&txToIn), nIn(nInIn), nFlags(nFlagsIn), cacheStore(cacheIn), error(SCRIPT_ERR_UNKNOWN_ERROR) {}
 
     bool operator()();
